@@ -8,8 +8,8 @@ export const UNHANDLED = Symbol('do-action-unhandled');
 
 export const PHASE_INIT = null;
 export const PHASE_PRE = -1;
-export const PHASE_DO = 0;
+export const PHASE_ON = 0;
 export const PHASE_POST = 1;
 
-export const PHASE_DEFAULT_LIST = [PHASE_PRE, PHASE_DO, PHASE_POST];
+export const PHASE_DEFAULT_LIST = [PHASE_PRE, PHASE_ON, PHASE_POST];
 

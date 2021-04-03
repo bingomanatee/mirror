@@ -27,7 +27,7 @@ other $send-based operations they will throw if the event errors out.
 
 ## Simpler event phasing
 
-Event phases are numeric - currently, PHASE_PRE(-1), PHASE_DO(0) and PHASE_POST. 
+Event phases are numeric - currently, PHASE_PRE(-1), PHASE_ON(0) and PHASE_POST. 
 
 ## re-branding "field subjects" as "children"
 
@@ -38,13 +38,13 @@ feed into a key of its value.
 ## a holistic proxy
 
 Where LGE had `.my` and `.do` proxies to its values and actions (respectively) Mirror has a single 
-proxy, `.$p` that has all its fields and 
+proxy, `.$p` that has all its fields and methods exposed as a flat object. 
 
+for backwards compatibility, my is also provided as a synonym for $p;
 # Pending work
 
 A few features have dropped off the table from LGE:
 
-* **transactions** will be incorporated soon
 * **custom phases** will be added -- not sure how soon
 * **auto-nested mirrors**: this is part of the inspiration for the reboot in the first place: 
   at some point, perhaps as a configuration option, mirrors will auto-decompose passed-through 

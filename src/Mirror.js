@@ -1,10 +1,12 @@
-import { BehaviorSubject, Subject, of } from 'rxjs';
+import {
+  BehaviorSubject, Subject, of, combineLatest,
+} from 'rxjs';
 import {
   tap, distinctUntilChanged, flatMap, map, filter,
 } from 'rxjs/operators';
 import isEqual from 'lodash/isEqual';
 import {
-  ACTION_NEXT, PHASE_DEFAULT_LIST, PHASE_DO, PHASE_INIT, SKIP, UNHANDLED,
+  ACTION_NEXT, PHASE_DEFAULT_LIST, PHASE_ON, PHASE_INIT, SKIP, UNHANDLED, identity,
 } from './constants';
 import Event from './Event';
 import ErrorWrapper from './ErrorWrapper';
@@ -15,6 +17,14 @@ import { asUserAction } from './utils';
  * mirror is the most atomic element in the Mirror class system - it has a single value,
  * and operates like a BehaviorSubject with the exception that it can have actions
  * and emits change events
+ *
+ * Because Mirror extends BehaviorSubject, to insulate
+ * Mirror against future revisions of the BehaviorSubject class,
+ * all methods/properties are $ or _$ (or _$$) prefixed.
+ *
+ * public methods/properties  are prefixed with `$`
+ * private methods/properties are prefixed with `_$`
+ * local values of private methods are prefixed with `_$$`
  */
 export default class Mirror extends BehaviorSubject {
   constructor(value, options) {
@@ -32,6 +42,8 @@ export default class Mirror extends BehaviorSubject {
     if (options) {
       this._$config(options);
     }
+    this._$constructed = true;
+    this._$value = value;
   }
 
   _$config(options) {
@@ -104,15 +116,30 @@ export default class Mirror extends BehaviorSubject {
   $addAct(name, handler) {
     if (typeof handler !== 'function') throw new Error(`$act requires function for ${name}`);
     const target = this;
-    const subscription = this.$on(asUserAction(name), (evt) => {
+    const sub = this.$on(asUserAction(name), (evt) => {
       const { args } = evt.value;
       const result = handler(target, ...args);
       evt.next({
         ...evt.value,
         result,
       });
-    }, PHASE_DO);
-    this._$registerAct(name, handler, subscription);
+    }, PHASE_ON);
+
+    if (!this._$acts) {
+      this._$acts = new Map();
+    } else this.$remAct(name);
+
+    const proxy = (...args) => {
+      const evt = this.$do(name, ...args);
+      return evt ? evt._value : undefined;
+    };
+
+    this._$acts.set(name, {
+      name,
+      handler,
+      sub,
+      proxy,
+    });
   }
 
   $addActs(obj) {
@@ -137,19 +164,6 @@ export default class Mirror extends BehaviorSubject {
 
     }
     this._$acts.delete(name);
-  }
-
-  _$registerAct(name, handler, sub) {
-    if (!this._$acts) {
-      this._$acts = new Map();
-    }
-    this.$remAct(name);
-
-    this._$acts.set(name, {
-      name,
-      handler,
-      sub,
-    });
   }
 
   /**
@@ -180,7 +194,7 @@ export default class Mirror extends BehaviorSubject {
     return this._$events;
   }
 
-  $on(action, handler, phase = PHASE_DO) {
+  $on(action, handler, phase = PHASE_ON) {
     return this.$events.subscribe({
       next(evt) {
         if (evt.isStopped) return;
@@ -196,6 +210,113 @@ export default class Mirror extends BehaviorSubject {
   }
 
   /**
+   * ----------------- transactions ------------------
+   * We use transactions to muffle subscriptions so we have an out transmitter
+   * that we relay messages from the native stream to when transcations are not active.
+   *
+   * As this is extended behavior we don't alter the core subscription pattern
+   * but allow $subscription(...) to muffled output (below).
+   *
+   * @returns {BehaviorSubject}
+   */
+
+  get _$transStream() {
+    if (!this._$$transStream) {
+      this._$$transStream = new BehaviorSubject(new Set());
+    }
+    return this._$$transStream;
+  }
+
+  $remTrans(subject) {
+    const transSets = this._$activeTrans;
+    transSets.delete(subject);
+    this._$transStream.next(transSets);
+  }
+
+  /**
+   *
+   * @returns {Set<any>}
+   * @private
+   */
+  get _$activeTrans() {
+    const activeTrans = new Set();
+    this._$transStream.value.forEach((trans) => {
+      if (!trans.isStopped) {
+        activeTrans.add(trans);
+      }
+    });
+
+    return activeTrans;
+  }
+
+  /**
+   * blocks broacast out of $subscribe until the returned stream is stopped.
+   *
+   * @param subject {Subject?} a subject that will block transmission until stopped;
+   *       created if not provided.
+   * @returns {Subject}
+   */
+  $trans(subject) {
+    if (!subject) return this.$trans(new Subject());
+
+    const transSets = this._$activeTrans;
+    transSets.add(subject);
+    const self = this;
+
+    subject.subscribe({
+      complete() {
+        self.$remTrans(subject);
+      },
+      error() {
+        self.$remTrans(subject);
+      },
+    });
+    this._$transStream.next(transSets);
+    return subject;
+  }
+
+  get _$outThrottled() {
+    if (!this._$$outThrottled) {
+      const self = this;
+      this._$$outThrottled = combineLatest(this._$transStream, self)
+        .pipe(
+          filter(([trans]) => !trans.size),
+          map((streams) => streams[1]),
+          distinctUntilChanged(),
+        );
+
+      this._$$outThrottled.subscribe((v) => {
+        self._$value = v;
+      }, identity);
+    }
+
+    return this._$$outThrottled;
+  }
+
+  /**
+   * the transaction-throttled value.
+   * Also, happily, won't thrown an
+   * @returns {*}
+   */
+  get $value() {
+    return this._$value;
+  }
+
+  /**
+   * ----------------- transactional subscribe -------------------
+   * This emits only in the absence of transactional lock(s);
+   * note- it also has a distinctUntilChanged() operator in its pipe
+   * so it may also be less noisy even without transactions.
+   *
+   * @param args {manager}
+   * @returns {Subscription}
+   */
+
+  $subscribe(...args) {
+    return this._$outThrottled.subscribe(...args);
+  }
+
+  /**
    * ---------------- PROXIES ------------------
    * These are quick aliases for access to values and actions.
    * They rely on Proxy which is not universally accessible (F**king IE);
@@ -205,19 +326,28 @@ export default class Mirror extends BehaviorSubject {
     if (!this._$p) {
       this._$p = new Proxy(this, {
         get(target, key) {
-          if (target.$children) // is a collection
-          {
-            if (target.$children.has(key)) return target.$children.get(key).value;
-          }
+          if ((target.$children) // is a collection
+          && (target.$children.has(key))
+          ) return target.$children.get(key).value;
+
           if (target._$acts.has(key)) {
-            return (...args) => target.$do(key, ...args);
+            return target._$acts.get(key).proxy;
           }
           // name is not a proxied value; directly refer to the target
           return target[key];
         },
-        set: this.$set ? (target, key, value) => target.$set(key, value) : undefined,
+        set: this.$set ? (target, key, value) => target.$set(key, value) : () => (undefined),
       });
     }
     return this._$p;
+  }
+
+  get $my() {
+    return this.$p;
+  }
+
+  get my() {
+    console.log('deprecated; use $my or $p');
+    return this.$p;
   }
 }

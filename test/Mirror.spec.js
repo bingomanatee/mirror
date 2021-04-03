@@ -138,6 +138,162 @@ tap.test(p.name, (suite) => {
       acts.end();
     });
 
+    subjectSuite.test('proxy', (p) => {
+      const mir = new Subject(10, {
+        actions: {
+          double: ((self) => self.next(self.value * 2)),
+          add: ((self, n) => self.next(self.value + n)),
+        },
+      });
+
+
+      const proxy = mir.$p;
+      const [log] = watch(proxy);
+
+      p.same(proxy.value, 10);
+
+      proxy.double();
+
+      proxy.add(5);
+
+      p.same(proxy.value, 25);
+
+      p.same(log, {
+        history: [10, 20, 25],
+        errors: [],
+      });
+      p.end();
+    });
+
+    subjectSuite.test('transactions', (trans) => {
+      trans.test('suppresses transactional value until end of trans', (transSimple) => {
+        const mirr = new Subject(10);
+        const [log] = watch(mirr);
+        const transValues = [];
+        mirr.$subscribe((v) => transValues.push(v));
+        transSimple.same(log, {
+          history: [10],
+          errors: [],
+        });
+
+        transSimple.same(transValues, [10]);
+
+        mirr.next(20);
+
+        transSimple.same(log, {
+          history: [10, 20],
+          errors: [],
+        });
+
+        transSimple.same(transValues, [10, 20]);
+
+        const s = mirr.$trans();
+
+        mirr.next(30);
+
+        transSimple.same(log, {
+          history: [10, 20, 30],
+          errors: [],
+        });
+
+        transSimple.same(transValues, [10, 20]);
+
+        mirr.next(40);
+
+        transSimple.same(log, {
+          history: [10, 20, 30, 40],
+          errors: [],
+        });
+
+        transSimple.same(transValues, [10, 20]);
+
+        s.complete();
+
+        transSimple.same(log, {
+          history: [10, 20, 30, 40],
+          errors: [],
+        });
+
+        transSimple.same(transValues, [10, 20, 40]);
+
+        transSimple.end();
+      });
+
+      trans.test('multiple transactions', (transSimple) => {
+        const mirr = new Subject(10);
+        const [log] = watch(mirr);
+        const transValues = [];
+        mirr.$subscribe((v) => transValues.push(v));
+        transSimple.same(log, {
+          history: [10],
+          errors: [],
+        });
+
+        transSimple.same(transValues, [10]);
+
+        mirr.next(20);
+
+        transSimple.same(log, {
+          history: [10, 20],
+          errors: [],
+        });
+
+        transSimple.same(transValues, [10, 20]);
+
+        const s = mirr.$trans();
+
+        mirr.next(30);
+
+        transSimple.same(log, {
+          history: [10, 20, 30],
+          errors: [],
+        });
+
+        const s2 = mirr.$trans();
+
+        transSimple.same(transValues, [10, 20]);
+
+        mirr.next(40);
+
+        transSimple.same(log, {
+          history: [10, 20, 30, 40],
+          errors: [],
+        });
+
+        transSimple.same(transValues, [10, 20]);
+
+        s.complete();
+
+        transSimple.same(log, {
+          history: [10, 20, 30, 40],
+          errors: [],
+        });
+
+        transSimple.same(transValues, [10, 20]);
+
+        mirr.next(50);
+
+        transSimple.same(log, {
+          history: [10, 20, 30, 40, 50],
+          errors: [],
+        });
+
+        transSimple.same(transValues, [10, 20]);
+        s2.complete();
+
+
+        transSimple.same(log, {
+          history: [10, 20, 30, 40, 50],
+          errors: [],
+        });
+
+        transSimple.same(transValues, [10, 20, 50]);
+
+        transSimple.end();
+      });
+      trans.end();
+    });
+
     subjectSuite.end();
   });
 
