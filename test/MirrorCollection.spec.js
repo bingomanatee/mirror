@@ -13,6 +13,7 @@ const ORIGIN = { x: 0, y: 0 };
 const ORIGIN_2 = { x: 10, y: 0 };
 const ORIGIN_MAP = lib.asMap(ORIGIN);
 const ORIGIN_MAP_2 = lib.asMap(ORIGIN_2);
+const MAP_10_5 = lib.asMap({ x: 10, y: 5 });
 const BAR = 'bar';
 const ERR = new Error('life is hard');
 
@@ -107,6 +108,22 @@ tap.test(p.name, (suite) => {
         doTest.end();
       });
 
+      mp.test('$value', (v$) => {
+        const mir = new Subject(ORIGIN_MAP);
+        const t = mir.$trans();
+        mir.$set('x', 10);
+        mir.$set('y', 5);
+        v$.same(mir.$value, ORIGIN_MAP, '$value frozen during transaction');
+        v$.same(mir.value, MAP_10_5);
+        t.complete();
+
+        v$.same(mir.$value, MAP_10_5, '$value updated after trans end');
+        v$.same(mir.value, MAP_10_5);
+
+        v$.end();
+      });
+
+      // @TODO: test proxy on object
       mp.test('proxy', (p) => {
         const mir = new Subject(ORIGIN_MAP,
           {

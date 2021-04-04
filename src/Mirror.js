@@ -289,6 +289,7 @@ export default class Mirror extends BehaviorSubject {
     const transSets = this._$activeTrans;
     transSets.add(subject);
     const self = this;
+    const stub = this.$subject; // insure updates of ._$next
 
     subject.subscribe({
       complete() {
@@ -302,7 +303,12 @@ export default class Mirror extends BehaviorSubject {
     return subject;
   }
 
-  get _$outThrottled() {
+  /**
+   * A throttled Subject that reflects
+   * a copy of this' last un-transactinally locked value.
+   * @returns {Observable<*>}
+   */
+  get $subject() {
     if (!this._$$outThrottled) {
       const self = this;
       this._$$outThrottled = combineLatest(this._$transStream, self)
@@ -340,7 +346,7 @@ export default class Mirror extends BehaviorSubject {
    */
 
   $subscribe(...args) {
-    return this._$outThrottled.subscribe(...args);
+    return this.$subject.subscribe(...args);
   }
 
   /**

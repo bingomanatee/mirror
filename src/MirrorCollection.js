@@ -244,7 +244,7 @@ export default class MirrorCollection extends Mirror {
    * @param key
    */
   $delete(key = SKIP) {
-    if ((key === SKIP) || (!this.$has(key))) {
+    if ((key === SKIP) || (!this.$has(key)) || this.isStopped) {
       return;
     }
 
@@ -259,11 +259,12 @@ export default class MirrorCollection extends Mirror {
       this.$children.delete(key);
     }
 
-    if (this.$has(key)) {
-      const value = this.getValue();
+    let value = this.getValue();
+    if (this._$isMap) {
+      value = new Map(value);
       value.delete(key);
-      this.$send(ACTION_NEXT, value);
-    }
+    } else delete value[key];
+    this.$send(ACTION_NEXT, value);
 
     delete this._$deleting;
 
@@ -282,8 +283,7 @@ export default class MirrorCollection extends Mirror {
         get(target, key) {
           try {
             if (target.$has(key)) {
-              const current = target.$get(key);
-              return current;
+              return target._$isMap ? target.value.get(key) : target.value[key];
             }
 
             if (target._$$acts && target._$$acts.has(key)) {
