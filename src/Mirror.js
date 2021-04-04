@@ -29,19 +29,37 @@ import { asUserAction } from './utils';
 export default class Mirror extends BehaviorSubject {
   constructor(value, options) {
     super(value);
+    if (options) {
+      this._$config(options);
+    }
     this.$on(ACTION_NEXT, (evt) => {
       evt.subscribe({
         complete: () => {
           super.next(evt.value);
         },
         error: (err) => {
-          this.error(err);
+          console.log('next aborted: ', err);
         },
       });
     });
-    if (options) {
-      this._$config(options);
-    }
+
+    const self = this;
+    this.$events.subscribe({
+      next(evt) {
+        if (evt && evt.subscribe) {
+          evt.subscribe({
+            error(err) {
+              console.log('error in mirror: ', err, self.name || self);
+              if (err && err.thrown) {
+                console.log('thrown:', err.thrownError);
+              }
+            },
+          });
+        }
+      },
+      error(err) {},
+    });
+
     this._$constructed = true;
     this._$value = value;
   }
@@ -85,26 +103,28 @@ export default class Mirror extends BehaviorSubject {
    */
   $send(action, value) {
     const event = new Event(value, action, this);
-    if (this.debug) console.log('sending event:', event.action);
     this.$events.next(event);
-    if (this.debug) console.log('done sending event:', event.action);
     if (!event.isStopped) event.complete();
     return event;
   }
 
-  $do(name, ...args) {
-    const {
-      thrownError,
-      value,
-    } = this.$send(asUserAction(name), {
+  $act(name, ...args) {
+    const evt = this.$send(asUserAction(name), {
       args,
       result: UNHANDLED,
     });
-    if (thrownError) throw thrownError;
-    if (value.result === UNHANDLED) {
+    if (evt) {
+      if (evt.thrownError) {
+        throw evt.thrownError;
+      }
+    } else {
+      console.warn('$act did not return event.');
+      return;
+    }
+    if (evt.value.result === UNHANDLED) {
       console.warn('unhandled user action', name, 'called with ', ...args);
     }
-    return value.result;
+    return evt.value.result;
   }
 
   /**
@@ -125,12 +145,10 @@ export default class Mirror extends BehaviorSubject {
       });
     }, PHASE_ON);
 
-    if (!this._$acts) {
-      this._$acts = new Map();
-    } else this.$remAct(name);
+    this.$remAct(name);
 
     const proxy = (...args) => {
-      const evt = this.$do(name, ...args);
+      const evt = this.$act(name, ...args);
       return evt ? evt._value : undefined;
     };
 
@@ -140,6 +158,17 @@ export default class Mirror extends BehaviorSubject {
       sub,
       proxy,
     });
+  }
+
+  get _$acts() {
+    if (!this._$$acts) {
+      this._$$acts = new Map();
+    }
+    return this._$$acts;
+  }
+
+  $hasAction(key) {
+    return this._$$acts && this._$$acts.has(key);
   }
 
   $addActs(obj) {
@@ -153,17 +182,13 @@ export default class Mirror extends BehaviorSubject {
   }
 
   $remAct(name) {
-    try {
-      if (this._$acts && this._$acts.has(name)) {
-        const { sub } = this._$acts;
-        if (sub) {
-          sub.unsubscribe();
-        }
+    if (this._$$acts && this._$acts.has(name)) {
+      const { sub } = this._$acts;
+      if (sub) {
+        sub.unsubscribe();
       }
-    } catch (err) {
-
+      this._$acts.delete(name);
     }
-    this._$acts.delete(name);
   }
 
   /**
@@ -202,6 +227,8 @@ export default class Mirror extends BehaviorSubject {
           try {
             handler(evt);
           } catch (err) {
+            console.log('$on hander --- thrown error from ', handler.toString());
+            console.log('thrown: ', err);
             if (!evt.isStopped) evt.error(evt);
           }
         }
@@ -321,25 +348,54 @@ export default class Mirror extends BehaviorSubject {
    * These are quick aliases for access to values and actions.
    * They rely on Proxy which is not universally accessible (F**king IE);
    */
+  get $proxy() {
+    return this.$p;
+  }
 
+  /**
+   * a proxy for the mirror that is a flatter object with accessors
+   * corresponding to the actions (if any).
+   *
+   * @returns {Mirror|*}
+   */
   get $p() {
     if (!this._$p) {
       this._$p = new Proxy(this, {
         get(target, key) {
-          if ((target.$children) // is a collection
-          && (target.$children.has(key))
-          ) return target.$children.get(key).value;
-
-          if (target._$acts.has(key)) {
-            return target._$acts.get(key).proxy;
+          try {
+            if (target._$acts.has(key)) {
+              return target._$acts.get(key).proxy;
+            }
+            // name is not a proxied value; directly refer to the target
+            return target[key];
+          } catch (err) {
+            console.log('error getting', key);
+            console.log('from', target);
+            console.warn(err);
           }
-          // name is not a proxied value; directly refer to the target
-          return target[key];
         },
-        set: this.$set ? (target, key, value) => target.$set(key, value) : () => (undefined),
       });
     }
     return this._$p;
+  }
+
+  get $do() {
+    if (!this._$do) {
+      this._$do = new Proxy(this, {
+        get(target, key) {
+          if (target.$hasAction(key)) {
+            return target._$acts.get(key).proxy;
+          }
+          return identity;
+        },
+      });
+    }
+    return this._$do;
+  }
+
+  get do() {
+    console.warn('deprecated: use $do or $p');
+    return this.$do;
   }
 
   get $my() {
@@ -347,7 +403,7 @@ export default class Mirror extends BehaviorSubject {
   }
 
   get my() {
-    console.log('deprecated; use $my or $p');
+    console.warn('deprecated; use $my or $p');
     return this.$p;
   }
 }

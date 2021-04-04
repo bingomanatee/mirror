@@ -1,8 +1,10 @@
 import { map } from 'rxjs/operators';
-import { BehaviorSubject } from 'rxjs';
+import upperFirst from 'lodash/upperFirst';
+import lowerFirst from 'lodash/lowerFirst';
+import clone from 'lodash/clone';
 import Mirror from './Mirror';
 import {
-  ACTION_CHANGE_KEYS, ACTION_CHILD_ERROR, ACTION_NEXT, PHASE_POST, SKIP,
+  ACTION_CHANGE_KEYS, ACTION_CHILD_ERROR, ACTION_NEXT, identity, PHASE_POST, SKIP,
 } from './constants';
 import { asMap, asObject } from './utils';
 
@@ -28,11 +30,15 @@ function actionChildError(error, {
  */
 function onUpdate(record) {
   record.$on(ACTION_CHANGE_KEYS, (evt) => {
-    const nextEvent = record.$changeKeys(evt.value);
-    // we cascade the nextEvent errors into the triggering changekeys event
-    if (nextEvent.thrownError) {
-      evt.error(nextEvent.thrownError);
+    if (!evt) {
+      console.warn('---- WTF? no event to ACK');
+      return;
     }
+    if (evt.thrownError) {
+      console.warn('changeKeys --- already has error: ', evt.thrownError);
+      return;
+    }
+    record.$changeKeys(evt.value);
   }, PHASE_POST);
 }
 
@@ -44,8 +50,15 @@ function onUpdate(record) {
  * as an object or a map to subscribers.
  */
 export default class MirrorCollection extends Mirror {
-  constructor(value) {
-    super(value);
+  /**
+   *
+   * @param value {any}
+   * @param options {Object}
+   * @param options.actions {Object} a POJO of actions - functions;
+   * @param options.name {String} an identifier for the collection
+   */
+  constructor(value, options) {
+    super(value, options);
     this._$isMap = (value instanceof Map);
     // @TODO: test for object
     this.$children = new Map();
@@ -85,8 +98,15 @@ export default class MirrorCollection extends Mirror {
    * @return Event
    */
   $changeKeys(changedKeyMap) {
+    const firstValue = clone(this.value);
     const updateMap = asMap(this.value);
-    asMap(changedKeyMap).forEach((value, key) => updateMap.set(key, value));
+    asMap(changedKeyMap).forEach((value, key) => {
+      try {
+        updateMap.set(key, value);
+      } catch (err) {
+        console.log('error with revision setting ', key, 'to', value, 'from', changedKeyMap, 'to', updateMap);
+      }
+    });
 
     if (!this._$isMap) {
       return this.$next(asObject(updateMap));
@@ -106,8 +126,48 @@ export default class MirrorCollection extends Mirror {
    * an unguarded pipe to the root next of Mirror
    * @param map
    */
-  $next(map) {
-    super.next(map);
+  $next(val) {
+    try {
+      const t = this.$trans();
+      const valMap = asMap(val);
+      const next = new Map(valMap); // clone
+      const nextChildren = new Map();
+
+      valMap.forEach((keyVal, key) => {
+        if (this.$hasChild(key)) {
+          nextChildren.set(key, keyVal);
+          this.$children.get(key).next(keyVal); //  should trigger a muffled update.
+          next.delete(key);
+        }
+      });
+      // if there are any un-child mapped properties, update them manually.
+      // will be processed as a changeMap -- won't affect child values processed above.
+      if (next.size) {
+        super.next(this._$isMap ? next : asObject(next));
+      }
+      t.complete();
+    } catch (err) {
+      console.log('error in $next', err, 'from map', map);
+    }
+  }
+
+  /**
+   * returns the TRUE value of a variable; ignores transactional locks.
+   * will reach out to a transactionally locked child to get its true current value.
+   * @param key
+   * @returns {undefined|*}
+   */
+  $get(key) {
+    if (!this.$has(key)) {
+      return undefined;
+    }
+    if (this.$hasChild(key)) {
+      return this.$children.get(key).$value;
+    }
+    if (this._$isMap) {
+      return this.value.get(key);
+    }
+    return this.value[key];
   }
 
   $set(key, val) {
@@ -208,5 +268,96 @@ export default class MirrorCollection extends Mirror {
     delete this._$deleting;
 
     t.complete();
+  }
+
+  /**
+   * MirrorCollection proxy with action and property accessors.
+   *
+   * @returns {MirrorCollection|*}
+   */
+  get $p() {
+    if (!this._$p) {
+      const self = this;
+      this._$p = new Proxy(this, {
+        get(target, key) {
+          try {
+            if (target.$has(key)) {
+              const current = target.$get(key);
+              return current;
+            }
+
+            if (target._$$acts && target._$$acts.has(key)) {
+              const def = target._$acts.get(key);
+              if (def) return def.proxy;
+            }
+
+            console.warn('--- cannot proxy ', key, 'from', target);
+            console.warn('returning raw value:', target[key]);
+            // name is not a proxied value; directly refer to the target
+            return target[key];
+          } catch (err) {
+            console.log('error getting', key);
+            console.log('from', target);
+            console.warn(err);
+          }
+          return undefined;
+        },
+        set(target, key, value) {
+          return target.$set(key, value);
+        },
+      });
+    }
+    return this._$p;
+  }
+
+  /**
+   * ------------ do ------------
+   * includes automatic child setters;
+   */
+
+  get $do() {
+    if (!this._$do) {
+      this._$do = new Proxy(this, {
+        get(target, key) {
+          if (target.$hasAction(key)) {
+            return target._$acts.get(key).proxy;
+          }
+          if (/^set/i.test(key)) return target._$trySet(key);
+          console.warn('$do-- cannot find action', key);
+          return null; // should throw, wrist-slapping the programmer to write better code
+        },
+      });
+    }
+    return this._$do;
+  }
+
+  _$trySet(key) {
+    const self = this;
+    try {
+      const targetName = lowerFirst(`${key}`.replace(/^set/i, ''));
+      if (this.$has(targetName)) {
+        return (value) => this.$set(targetName, value);
+      }
+
+      // forgiving attempt for case variation
+      const lower = targetName.toLowerCase();
+      const childFn = [...this.$children.keys(), ...asMap(this.value).keys()].reduce((fn, childKey) => {
+        if (fn) return fn;
+        const childLower = `${childKey}`.toLowerCase();
+
+        if (childLower === lower) {
+          console.warn(`found key, wrong case: ${key} should be "set${upperFirst(`${childKey}`)}".`);
+          return (value) => self.$set(childKey, value);
+        }
+      }, null);
+
+      if (childFn) {
+        return childFn;
+      }
+      console.warn('trySet -- cannot match value ', lower);
+    } catch (err) {
+      console.warn('error trySetting key', key, ':', err);
+    }
+    return identity;
   }
 }

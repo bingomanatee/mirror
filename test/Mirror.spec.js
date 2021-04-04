@@ -128,11 +128,11 @@ tap.test(p.name, (suite) => {
       });
 
       acts.same(mir.value, 10);
-      mir.$do('double');
+      mir.$act('double');
       acts.same(mir.value, 20);
-      mir.$do('add', 5);
+      mir.$act('add', 5);
       acts.same(mir.value, 25);
-      mir.$do('double');
+      mir.$act('double');
       acts.same(mir.value, 50);
 
       acts.end();
