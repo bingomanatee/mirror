@@ -124,16 +124,19 @@ tap.test(p.name, (suite) => {
         actions: {
           double: ((self) => self.next(self.value * 2)),
           add: ((self, n) => self.next(self.value + n)),
+          square: ((self) => self.value ** 2),
         },
       });
 
       acts.same(mir.value, 10);
-      mir.$act('double');
+      mir.$do.double();
       acts.same(mir.value, 20);
-      mir.$act('add', 5);
+      mir.$do.add(5);
       acts.same(mir.value, 25);
-      mir.$act('double');
+      mir.$do.double();
       acts.same(mir.value, 50);
+
+      acts.same(mir.$do.square(), 2500);
 
       acts.end();
     });

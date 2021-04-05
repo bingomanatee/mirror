@@ -135,10 +135,10 @@ export default class Mirror extends BehaviorSubject {
    */
   $addAct(name, handler) {
     if (typeof handler !== 'function') throw new Error(`$act requires function for ${name}`);
-    const target = this;
+    const self = this;
     const sub = this.$on(asUserAction(name), (evt) => {
       const { args } = evt.value;
-      const result = handler(target, ...args);
+      const result = handler(self, ...args);
       evt.next({
         ...evt.value,
         result,
@@ -147,10 +147,7 @@ export default class Mirror extends BehaviorSubject {
 
     this.$remAct(name);
 
-    const proxy = (...args) => {
-      const evt = this.$act(name, ...args);
-      return evt ? evt._value : undefined;
-    };
+    const proxy = (...args) => self.$act(name, ...args);
 
     this._$acts.set(name, {
       name,
@@ -368,9 +365,11 @@ export default class Mirror extends BehaviorSubject {
     if (!this._$p) {
       this._$p = new Proxy(this, {
         get(target, key) {
+          if (key === '$base') return target;
           try {
-            if (target._$acts.has(key)) {
-              return target._$acts.get(key).proxy;
+            if (target._$$acts && target._$$acts.has(key)) {
+              const def = target._$acts.get(key);
+              if (def) return def.proxy;
             }
             // name is not a proxied value; directly refer to the target
             return target[key];
@@ -378,6 +377,7 @@ export default class Mirror extends BehaviorSubject {
             console.log('error getting', key);
             console.log('from', target);
             console.warn(err);
+            return undefined;
           }
         },
       });
@@ -402,14 +402,5 @@ export default class Mirror extends BehaviorSubject {
   get do() {
     console.warn('deprecated: use $do or $p');
     return this.$do;
-  }
-
-  get $my() {
-    return this.$p;
-  }
-
-  get my() {
-    console.warn('deprecated; use $my or $p');
-    return this.$p;
   }
 }

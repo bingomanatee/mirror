@@ -281,6 +281,7 @@ export default class MirrorCollection extends Mirror {
       const self = this;
       this._$p = new Proxy(this, {
         get(target, key) {
+          if (key === '$base') return target;
           try {
             if (target.$has(key)) {
               return target._$isMap ? target.value.get(key) : target.value[key];
@@ -310,9 +311,11 @@ export default class MirrorCollection extends Mirror {
     return this._$p;
   }
 
+
   /**
-   * ------------ do ------------
-   * includes automatic child setters;
+   * in Looking Glass Engine $do was a proxy for action calls;
+   * its still useful in case of namespace overlap.
+   * @returns {null|MirrorCollection|(function(*=): Event)|*|(function(*): *)}
    */
 
   get $do() {
@@ -359,5 +362,22 @@ export default class MirrorCollection extends Mirror {
       console.warn('error trySetting key', key, ':', err);
     }
     return identity;
+  }
+
+  /**
+   * in Looking Glass Engine `stream.my` was the reccommended read-only way to get a keyed value
+   * regardless of whether the target was an object or a map; proxy does this (and more) so
+   * $my is provided for backwards compatibility with LGE.
+   *
+   * It still may be useful in case of namespace overlap between methods and properties
+   * @returns {MirrorCollection|*}
+   */
+  get $my() {
+    return this.$p;
+  }
+
+  get my() {
+    console.warn('deprecated; use $my or $p');
+    return this.$p;
   }
 }
