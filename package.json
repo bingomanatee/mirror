@@ -1,6 +1,6 @@
 {
   "name": "@wonderlandlabs/mirror",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "A rollup setup for modules",
   "main": "lib/index.js",
   "module": "es/index.js",
