@@ -8,19 +8,43 @@ const lib = require('./../lib/index');
 const watch = require('./util/watch');
 
 const Subject = lib[subjectName];
+const { ACTION_NEXT, PHASE_INIT } = lib;
 
-const ORIGIN = { x: 0, y: 0 };
-const ORIGIN_2 = { x: 10, y: 0 };
-const ORIGIN_MAP = lib.asMap(ORIGIN);
-const ORIGIN_MAP_2 = lib.asMap(ORIGIN_2);
-const MAP_10_5 = lib.asMap({ x: 10, y: 5 });
-const BAR = 'bar';
-const ERR = new Error('life is hard');
+function constants() {
+  const ORIGIN = {
+    x: 0,
+    y: 0,
+  };
+  const ORIGIN_2 = {
+    x: 10,
+    y: 0,
+  };
+  const ORIGIN_MAP = lib.asMap(ORIGIN, true);
+  const ORIGIN_MAP_2 = lib.asMap(ORIGIN_2, true);
+  const MAP_10_5 = lib.asMap({
+    x: 10,
+    y: 5,
+  });
+  const BAR = 'bar';
+  const ERR = new Error('life is hard');
+
+  return {
+    ORIGIN,
+    ORIGIN_2,
+    ORIGIN_MAP,
+    ORIGIN_MAP_2,
+    MAP_10_5,
+    BAR,
+    ERR,
+  };
+}
+
 
 tap.test(p.name, (suite) => {
   suite.test(subjectName, (subjectSuite) => {
     subjectSuite.test('as object', (ob) => {
       ob.test('constructor', (con) => {
+        const { ORIGIN } = constants();
         const mir = new Subject(ORIGIN);
         con.same(mir.value, ORIGIN);
 
@@ -28,6 +52,10 @@ tap.test(p.name, (suite) => {
       });
 
       ob.test('subscribe', (sub) => {
+        const {
+          ORIGIN,
+          ORIGIN_2,
+        } = constants();
         /**
          * @type MirrorCollection
          */
@@ -57,6 +85,7 @@ tap.test(p.name, (suite) => {
     });
     subjectSuite.test('as map', (mp) => {
       mp.test('constructor', (con) => {
+        const { ORIGIN_MAP } = constants();
         const mir = new Subject(ORIGIN_MAP);
         con.same(mir.value, ORIGIN_MAP);
 
@@ -64,6 +93,10 @@ tap.test(p.name, (suite) => {
       });
 
       mp.test('subscribe', (sub) => {
+        const {
+          ORIGIN_MAP,
+          ORIGIN_MAP_2,
+        } = constants();
         /**
          * @type MirrorCollection
          */
@@ -90,6 +123,7 @@ tap.test(p.name, (suite) => {
       });
 
       mp.test('$do', (doTest) => {
+        const { ORIGIN_MAP } = constants();
         const mir = new Subject(ORIGIN_MAP,
           {
             actions: {
@@ -109,6 +143,10 @@ tap.test(p.name, (suite) => {
       });
 
       mp.test('$value', (v$) => {
+        const {
+          ORIGIN_MAP,
+          MAP_10_5,
+        } = constants();
         const mir = new Subject(ORIGIN_MAP);
         const t = mir.$trans();
         mir.$set('x', 10);
@@ -125,6 +163,7 @@ tap.test(p.name, (suite) => {
 
       // @TODO: test proxy on object
       mp.test('proxy', (p) => {
+        const { ORIGIN_MAP } = constants();
         const mir = new Subject(ORIGIN_MAP,
           {
             actions: {
@@ -140,7 +179,6 @@ tap.test(p.name, (suite) => {
 
         try {
           const proxy = mir.$p;
-
 
           p.same(proxy.x, 0);
           p.same(proxy.y, 0);
@@ -161,6 +199,54 @@ tap.test(p.name, (suite) => {
         p.end();
       });
 
+      mp.test('child', (ch) => {
+        const coordSubject = new Subject({}, {
+          children: {
+            x: 0,
+            y: 0,
+          },
+        });
+        function onValue(evt) {
+          if (typeof evt.value !== 'number') {
+            evt.error(new Error('not a number'));
+          } else {
+            const floor = Math.floor(evt.value);
+            if (floor !== evt.value) evt.next(floor);
+          }
+        }
+        coordSubject.$children.get('x')
+          .$on(ACTION_NEXT, onValue);
+
+        coordSubject.$children.get('y')
+          .$on(ACTION_NEXT, onValue);
+
+        coordSubject.$do.setX(20);
+        ch.same(coordSubject.$my.x, 20);
+
+        coordSubject.$do.setY(22.5);
+        ch.same(coordSubject.$my.y, 22);
+
+        coordSubject.$do.setX('33');
+        ch.same(coordSubject.$my.x, 20);
+
+        coordSubject.$do.setX(40);
+        ch.same(coordSubject.$my.x, 40);
+
+        coordSubject.next({ x: 50, y: 33.3 });
+
+        ch.same(coordSubject.$my.x, 50);
+        ch.same(coordSubject.$my.y, 33);
+
+        coordSubject.next({ x: '3333', y: 40 });
+        ch.same(coordSubject.$my.x, 50);
+        ch.same(coordSubject.$my.y, 40);
+
+        coordSubject.next({ x: 22.5, y: 'a thousand' });
+        ch.same(coordSubject.$my.x, 22);
+        ch.same(coordSubject.$my.y, 40);
+
+        ch.end();
+      });
       mp.end();
     });
 

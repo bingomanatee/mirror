@@ -6,10 +6,10 @@ export const ACTION_CHANGE_KEYS = Symbol('action-update');
 export const ACTION_CHILD_ERROR = Symbol('action-child-error');
 export const UNHANDLED = Symbol('do-action-unhandled');
 
-export const PHASE_INIT = null;
+export const PHASE_INIT = -2;
 export const PHASE_PRE = -1;
 export const PHASE_ON = 0;
 export const PHASE_POST = 1;
 
-export const PHASE_DEFAULT_LIST = [PHASE_PRE, PHASE_ON, PHASE_POST];
+export const PHASE_DEFAULT_LIST = [PHASE_INIT, PHASE_PRE, PHASE_ON, PHASE_POST];
 

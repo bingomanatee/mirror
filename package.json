@@ -1,7 +1,7 @@
 {
   "name": "@wonderlandlabs/mirror",
   "version": "0.0.3",
-  "description": "A rollup setup for modules",
+  "description": "Full successor to Looking Glass Engine",
   "main": "lib/index.js",
   "module": "es/index.js",
   "files": [
@@ -14,15 +14,13 @@
     "build": "node_modules/rollup/dist/bin/rollup -c='rollup.config.js'"
   },
   "dependencies": {
-    "@wonderlandlabs/propper": "^2.0.5",
-    "babel-eslint": "^10.0.3",
-    "eslint-plugin-react-hooks": "^2.1.1",
-    "is": "^3.3.0",
     "lodash": "^4.17.19",
     "rxjs": "^6.6.6"
   },
   "devDependencies": {
     "eslint": "^6.3.0",
+    "babel-eslint": "^10.0.3",
+    "eslint-plugin-react-hooks": "^2.1.1",
     "eslint-config-airbnb": "^18.0.1",
     "eslint-plugin-import": "^2.18.2",
     "eslint-plugin-jsx-a11y": "^6.2.3",
@@ -36,5 +34,5 @@
   },
   "author": "David Edelhart",
   "license": "MIT",
-  "repository": "https://github.com/bingomanatee/rollup-starter-kit"
+  "repository": "https://github.com/bingomanatee/mirror"
 }

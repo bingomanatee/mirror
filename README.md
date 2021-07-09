@@ -30,18 +30,10 @@ Methods can be attached to Mirrors through `$addAct(name, fn)`
 or in the constructor:
 
 ```javascript
-const mir = new MirrorCollection({x: 0, y: 0 },
-  {
-    actions: {
-      offset(self, x, y) {
-        const s = self.$trans();
-
-        self.$do.setX(self.$my.x + x);
-        self.$do.setY(self.$my.y + y);
-        s.complete();
-      },
-    },
-  });
+const mir = new MirrorCollection({
+  x: 0,
+  y: 0
+});
 
 ```
 

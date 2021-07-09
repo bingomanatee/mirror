@@ -91,6 +91,10 @@ tap.test(p.name, (suite) => {
       send.same(log, {
         history: [{
           value: 1,
+          phase: -2,
+          action: 'bar',
+        },{
+          value: 1,
           phase: -1,
           action: 'bar',
         }, {
@@ -102,6 +106,10 @@ tap.test(p.name, (suite) => {
           phase: 1,
           action: 'bar',
         }, {
+          value: 2,
+          phase: -2,
+          action: 'alpha',
+        },  {
           value: 2,
           phase: -1,
           action: 'alpha',

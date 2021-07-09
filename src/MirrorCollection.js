@@ -1,12 +1,14 @@
+/* eslint-disable camelcase */
 import { map } from 'rxjs/operators';
 import upperFirst from 'lodash/upperFirst';
 import lowerFirst from 'lodash/lowerFirst';
 import clone from 'lodash/clone';
+import { BehaviorSubject } from 'rxjs';
 import Mirror from './Mirror';
 import {
   ACTION_CHANGE_KEYS, ACTION_CHILD_ERROR, ACTION_NEXT, identity, PHASE_POST, SKIP,
 } from './constants';
-import { asMap, asObject } from './utils';
+import { asMap, asObject, isObject } from './utils';
 
 function actionChildError(error, {
   child,
@@ -34,7 +36,7 @@ function onUpdate(record) {
       console.warn('---- WTF? no event to ACK');
       return;
     }
-    if (evt.thrownError) {
+    if (evt.isStopped || evt.thrownError) {
       console.warn('changeKeys --- already has error: ', evt.thrownError);
       return;
     }
@@ -55,18 +57,35 @@ export default class MirrorCollection extends Mirror {
    * @param value {any}
    * @param options {Object}
    * @param options.actions {Object} a POJO of actions - functions;
-   * @param options.name {String} an identifier for the collection
+   * @param options.name {String} an identifier for the collection;
+   * @param options.collections {Object} children who should be mapped to a MirrorCollection
    */
-  constructor(value, options) {
+  constructor(value, options = {}) {
     super(value, options);
     this._$isMap = (value instanceof Map);
     // @TODO: test for object
     this.$children = new Map();
-    asMap(value).forEach((val, key) => {
-      this.$addChild({ key, value: val });
-    });
-
+    this._$collectionOptions(options);
     onUpdate(this);
+  }
+
+  _$collectionOptions(options) {
+    if (!isObject(options)) {
+      return;
+    }
+    const { children = {}, collections = {} } = options;
+
+    asMap(children)
+      .forEach((val, key) => {
+        this.$addChild({
+          key,
+          value: val,
+        });
+      });
+
+    Object.keys(collections).forEach((key) => {
+      this.$addChild({ key, value: collections[key], type: 'collection' });
+    });
   }
 
   /**
@@ -77,6 +96,7 @@ export default class MirrorCollection extends Mirror {
    */
   $has(key) {
     if (this.isStopped) return false;
+    if (this.$hasChild(key)) return true;
     if (this._$isMap) return this.value.has(key);
     return key in this.value;
   }
@@ -98,20 +118,18 @@ export default class MirrorCollection extends Mirror {
    * @return Event
    */
   $changeKeys(changedKeyMap) {
-    const firstValue = clone(this.value);
+    if (this.isStopped) return null;
     const updateMap = asMap(this.value);
-    asMap(changedKeyMap).forEach((value, key) => {
-      try {
-        updateMap.set(key, value);
-      } catch (err) {
-        console.log('error with revision setting ', key, 'to', value, 'from', changedKeyMap, 'to', updateMap);
-      }
-    });
+    asMap(changedKeyMap)
+      .forEach((value, key) => {
+        try {
+          updateMap.set(key, value);
+        } catch (err) {
+          console.log('error with revision setting ', key, 'to', value, 'from', changedKeyMap, 'to', updateMap);
+        }
+      });
 
-    if (!this._$isMap) {
-      return this.$next(asObject(updateMap));
-    }
-    return this.$next(updateMap);
+    return this.$next(this._$convert(updateMap));
   }
 
   /**
@@ -123,31 +141,125 @@ export default class MirrorCollection extends Mirror {
   }
 
   /**
+   * convert a value set to the collections' type
+   * @param value
+   * @param force
+   * @returns {*|{}|Map<K, V>|Map|Map<any, any>}
+   */
+  // eslint-disable-next-line camelcase
+  _$convert(value, force) {
+    if (this._$isMap) {
+      return asMap(value, force);
+    }
+    return asObject(value, force);
+  }
+
+  get _$updatingChildren() {
+    if (!this.__$updatingChildren) {
+      this.__$updatingChildren = new Set();
+    }
+
+    return this.__$updatingChildren;
+  }
+
+  /**
+   * returns number of procesdses that are updating a given child.
+   * @param key
+   * @returns {number}
+   */
+  $isUpdatingChild(key) {
+    let count = 0;
+    this._$updatingChildren.forEach((subject) => {
+      if (!subject.isStopped && subject.value === key) {
+        count += 1;
+      }
+    });
+    return count;
+  }
+
+  _$unUpdateChild(subject) {
+    if (!subject.isStopped) {
+      subject.complete();
+    }
+    this._$updatingChildren.delete(subject);
+  }
+
+  /**
+   * reutrns a subject that blocks child update messaging until it is complete.
+   * subject has a $count of the _other_ subjects for that key that existed
+   * before it was created;
+   * @param key {string}
+   * @returns {BehaviorSubject<*>}
+   */
+  $updateChildSubject(key) {
+    const updateSubject = new BehaviorSubject(key);
+    updateSubject.$count = this.$isUpdatingChild(key);
+
+    this._$updatingChildren.add(updateSubject);
+    const self = this;
+    updateSubject.subscribe({
+      complete() {
+        self._$unUpdateChild(updateSubject);
+      },
+      error() {
+        self._$unUpdateChild(updateSubject);
+      },
+    });
+    return updateSubject;
+  }
+
+  /**
+   * send an update request to a child;
+   * @param key
+   * @param value {*} the new child value
+   * @returns {*}  the child's current value;
+   */
+  $updateChild(key, value) {
+    if (!this.$hasChild(key)) return value;
+    const child = this.$children.get(key);
+    if (child.value !== value) {
+      if (this.$isUpdatingChild(key)) return child.value;
+      const subject = this.$updateChildSubject(key);
+      try {
+        child.next(value); //  should trigger a muffled update.
+        subject.complete();
+      } catch (err) {
+        subject.error(err);
+      }
+    }
+    return child.value;
+  }
+
+  /**
    * an unguarded pipe to the root next of Mirror
    * @param map
    */
   $next(val) {
+    if (this.isStopped) {
+      console.log('attempt to send value ', val, 'to stopped mirror', this.name);
+      return;
+    };
+    const t = this.$trans();
     try {
-      const t = this.$trans();
       const valMap = asMap(val);
       const next = new Map(valMap); // clone
-      const nextChildren = new Map();
 
       valMap.forEach((keyVal, key) => {
         if (this.$hasChild(key)) {
-          nextChildren.set(key, keyVal);
-          this.$children.get(key).next(keyVal); //  should trigger a muffled update.
-          next.delete(key);
+          if (this.$isUpdatingChild(key)) {
+            if (this.$debug) console.log('not calling updateChild: is updating ', keyVal);
+          } else next.set(key, this.$updateChild(key, keyVal));
         }
       });
       // if there are any un-child mapped properties, update them manually.
       // will be processed as a changeMap -- won't affect child values processed above.
       if (next.size) {
-        super.next(this._$isMap ? next : asObject(next));
+        super.next(this._$convert(next));
       }
       t.complete();
     } catch (err) {
-      console.log('error in $next', err, 'from map', map);
+      console.log('error in $next', err, 'from', val);
+      t.error(err);
     }
   }
 
@@ -171,7 +283,11 @@ export default class MirrorCollection extends Mirror {
   }
 
   $set(key, val) {
-    return this.$send(ACTION_CHANGE_KEYS, new Map([[key, val]]));
+    if (this.$hasChild(key)) {
+      return this.$children.get(key)
+        .next(val);
+    }
+    return this.next(new Map([[key, val]]));
   }
 
   /**
@@ -201,23 +317,41 @@ export default class MirrorCollection extends Mirror {
   }
 
   /**
-   * note - parent updates are keyed to transactionally cloaked version of subscribe;
-   * child changes during transactions are kept private until the transaction completes.
    *
    * @param key {scalar}
    * @param value {any}
    * @returns {Subscription | Event}
    */
-  $addChild({ key, value }) {
+  $addChild({
+    key,
+    value,
+    type = 'value',
+  }) {
     if (this.$has(key)) {
-      return this.$set(key, value);
+      this.$delete(key);
     }
-    const mir = new Mirror(value);
+    let mir;
+    switch (type) {
+      case 'collection':
+        mir = new MirrorCollection(value, { name: key });
+        break;
+
+      default:
+        mir = new Mirror(value, { name: key });
+    }
     this.$children.set(key, mir);
     const self = this;
-    return mir.$subscribe({
+    mir.$subscribe({
       next(val) {
-        self.$send(ACTION_CHANGE_KEYS, new Map([[key, val]]));
+        if (!self.$isUpdatingChild(key)) {
+          const subject = self.$updateChildSubject(key);
+          try {
+            self.next(new Map([[key, val]]));
+            subject.complete();
+          } catch (err) {
+            subject.error(err);
+          }
+        }
       },
       error(err) {
         self.$send(...actionChildError(err, {
@@ -232,6 +366,7 @@ export default class MirrorCollection extends Mirror {
         }
       },
     });
+    return mir;
   }
 
   /**
@@ -263,7 +398,9 @@ export default class MirrorCollection extends Mirror {
     if (this._$isMap) {
       value = new Map(value);
       value.delete(key);
-    } else delete value[key];
+    } else {
+      delete value[key];
+    }
     this.$send(ACTION_NEXT, value);
 
     delete this._$deleting;
@@ -274,7 +411,7 @@ export default class MirrorCollection extends Mirror {
   /**
    * MirrorCollection proxy with action and property accessors.
    *
-   * @returns {MirrorCollection|*}
+   * @returns {Proxy}
    */
   get $p() {
     if (!this._$p) {
@@ -284,7 +421,7 @@ export default class MirrorCollection extends Mirror {
           if (key === '$base') return target;
           try {
             if (target.$has(key)) {
-              return target._$isMap ? target.value.get(key) : target.value[key];
+              return target.$get(key);
             }
 
             if (target._$$acts && target._$$acts.has(key)) {
@@ -311,7 +448,6 @@ export default class MirrorCollection extends Mirror {
     return this._$p;
   }
 
-
   /**
    * in Looking Glass Engine $do was a proxy for action calls;
    * its still useful in case of namespace overlap.
@@ -334,6 +470,12 @@ export default class MirrorCollection extends Mirror {
     return this._$do;
   }
 
+  /**
+   * returns a setter function based on a key
+   * @param key
+   * @returns {(function(*): *)|*|(function(*=): Event)}
+   * @private
+   */
   _$trySet(key) {
     const self = this;
     try {
@@ -344,7 +486,8 @@ export default class MirrorCollection extends Mirror {
 
       // forgiving attempt for case variation
       const lower = targetName.toLowerCase();
-      const childFn = [...this.$children.keys(), ...asMap(this.value).keys()].reduce((fn, childKey) => {
+      const childFn = [...this.$children.keys(), ...asMap(this.value)
+        .keys()].reduce((fn, childKey) => {
         if (fn) return fn;
         const childLower = `${childKey}`.toLowerCase();
 
@@ -377,7 +520,7 @@ export default class MirrorCollection extends Mirror {
   }
 
   get my() {
-    console.warn('deprecated; use $my or $p');
+    console.warn('my is deprecated; use $my or $p');
     return this.$p;
   }
 }

@@ -2,15 +2,15 @@ import {
   BehaviorSubject, Subject, of, combineLatest,
 } from 'rxjs';
 import {
-  tap, distinctUntilChanged, flatMap, map, filter,
+  distinctUntilChanged, map, filter, flatMap,
 } from 'rxjs/operators';
-import isEqual from 'lodash/isEqual';
+
+import lGet from 'lodash/get';
 import {
-  ACTION_NEXT, PHASE_DEFAULT_LIST, PHASE_ON, PHASE_INIT, SKIP, UNHANDLED, identity,
+  identity, ACTION_NEXT, PHASE_ON, PHASE_DEFAULT_LIST, SKIP, UNHANDLED,
 } from './constants';
 import Event from './Event';
-import ErrorWrapper from './ErrorWrapper';
-import mapEmitter from './mapEmitter';
+
 import { asUserAction } from './utils';
 
 /**
@@ -32,24 +32,23 @@ export default class Mirror extends BehaviorSubject {
     if (options) {
       this._$config(options);
     }
-    this.$on(ACTION_NEXT, (evt) => {
-      evt.subscribe({
-        complete: () => {
-          super.next(evt.value);
-        },
-        error: (err) => {
-          console.log('next aborted: ', err);
-        },
-      });
-    });
 
+    this._$watchNext();
+
+    this._$watchErrors();
+
+    this._$constructed = true;
+    this._$value = value;
+  }
+
+  _$watchErrors() {
     const self = this;
     this.$events.subscribe({
       next(evt) {
         if (evt && evt.subscribe) {
           evt.subscribe({
             error(err) {
-              console.log('error in mirror: ', err, self.name || self);
+              console.log('error in mirror: ', lGet(self, 'name', self), ':', lGet(err, 'message', err));
               if (err && err.thrown) {
                 console.log('thrown:', err.thrownError);
               }
@@ -57,11 +56,8 @@ export default class Mirror extends BehaviorSubject {
           });
         }
       },
-      error(err) {},
+      error() {},
     });
-
-    this._$constructed = true;
-    this._$value = value;
   }
 
   _$config(options) {
@@ -82,9 +78,10 @@ export default class Mirror extends BehaviorSubject {
   /**
    * intercepts updates and expresses them as events;
    * @param value
+   * @returns {Event}
    */
   next(value) {
-    this.$send(ACTION_NEXT, value);
+    return this.$send(ACTION_NEXT, value);
   }
 
   /**
@@ -93,16 +90,17 @@ export default class Mirror extends BehaviorSubject {
    * This does not do anything directly but triggers any responders to a given event
    * to act.
    *
-   * If the event is not intercepted(comleted or errored out) by a listener the event
+   * If the event is not intercepted(completed or errored out) by a listener the event
    * will be force-completed to trigger any cleanup activity
    * that an intereptor may be waiting for.
    *
-   * @param action {Any} preferrably a Symbol
-   * @param value {any} the action payload
+   * @param action {*} preferrably a Symbol
+   * @param value {*} the action payload
    * @returns {Event}
    */
-  $send(action, value) {
+  $send(action, value, phases = PHASE_DEFAULT_LIST) {
     const event = new Event(value, action, this);
+    event.$phases = phases;
     this.$events.next(event);
     if (!event.isStopped) event.complete();
     return event;
@@ -119,7 +117,7 @@ export default class Mirror extends BehaviorSubject {
       }
     } else {
       console.warn('$act did not return event.');
-      return;
+      return undefined;
     }
     if (evt.value.result === UNHANDLED) {
       console.warn('unhandled user action', name, 'called with ', ...args);
@@ -200,13 +198,13 @@ export default class Mirror extends BehaviorSubject {
     if (!this._$events) {
       this._$events = new Subject()
         .pipe(
-          flatMap((event) => of(...PHASE_DEFAULT_LIST)
+          flatMap((mappedEvent) => of(...PHASE_DEFAULT_LIST)
             .pipe(
               map(
-                (phase) => (event.isStopped ? SKIP : Object.assign(event, { phase })),
+                (phase) => (mappedEvent.isStopped ? SKIP : Object.assign(mappedEvent, { phase })),
               ),
             )),
-          filter((evt) => evt !== SKIP),
+          filter((evt) => (!evt.isStopped) && (!evt.hasError) && (evt !== SKIP)),
           distinctUntilChanged(
             Event.eventsMatch,
             (evt) => ((evt instanceof Event) ? evt.toJSON() : evt),
@@ -217,14 +215,17 @@ export default class Mirror extends BehaviorSubject {
   }
 
   $on(action, handler, phase = PHASE_ON) {
+    const self = this;
     return this.$events.subscribe({
       next(evt) {
-        if (evt.isStopped) return;
+        if (evt.isStopped) {
+          return;
+        }
         if (evt.action === action && evt.phase === phase) {
           try {
             handler(evt);
           } catch (err) {
-            console.log('$on hander --- thrown error from ', handler.toString());
+            console.log('$on handler --- thrown error from ', handler.toString());
             console.log('thrown: ', err);
             if (!evt.isStopped) evt.error(evt);
           }
@@ -281,7 +282,7 @@ export default class Mirror extends BehaviorSubject {
    * @returns {Subject}
    */
   $trans(subject) {
-    if (!subject) return this.$trans(new Subject());
+    if (!subject || subject.isStopped) return this.$trans(new Subject());
 
     const transSets = this._$activeTrans;
     transSets.add(subject);
@@ -298,6 +299,17 @@ export default class Mirror extends BehaviorSubject {
     });
     this._$transStream.next(transSets);
     return subject;
+  }
+
+  $transact(fn, subject, ...args) {
+    const trans = this.$trans(subject);
+
+    try {
+      fn(this, ...args);
+      trans.complete();
+    } catch (err) {
+      trans.error(err);
+    }
   }
 
   /**
@@ -400,7 +412,19 @@ export default class Mirror extends BehaviorSubject {
   }
 
   get do() {
-    console.warn('deprecated: use $do or $p');
+    console.warn('`.do` is deprecated: use $do or $p');
     return this.$do;
+  }
+
+  _$watchNext() {
+    this.$on(ACTION_NEXT, (evt) => {
+      evt.subscribe({
+        complete: () => {
+          super.next(evt.value);
+        },
+        error: () => {
+        },
+      });
+    });
   }
 }

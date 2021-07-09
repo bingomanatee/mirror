@@ -1,6 +1,6 @@
-export function asMap(m) {
+export function asMap(m, force) {
   if (m instanceof Map) {
-    return new Map(m);
+    return force ? new Map(m) : m;
   }
   const map = new Map();
   Object.keys(m)
@@ -8,8 +8,12 @@ export function asMap(m) {
   return map;
 }
 
-export function asObject(m) {
-  if (!(m instanceof Map)) return m;
+export function isObject(o) {
+  return o && (typeof o === 'object');
+}
+
+export function asObject(m, force) {
+  if (!(m instanceof Map)) return force ? { ...m } : m;
   const out = {};
   m.forEach((val, key) => {
     try {
