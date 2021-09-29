@@ -1,3 +1,5 @@
+import { BehaviorSubject } from 'rxjs';
+
 export function asMap(m, force) {
   if (m instanceof Map) {
     return force ? new Map(m) : m;
@@ -10,6 +12,10 @@ export function asMap(m, force) {
 
 export function isObject(o) {
   return o && (typeof o === 'object');
+}
+
+export function isMap(m) {
+  return m && (m instanceof Map);
 }
 
 export function asObject(m, force) {
@@ -29,4 +35,10 @@ export function asUserAction(str) {
 
   while (str.substr(0, 2) !== '$$') str = `$${str}`;
   return str;
+}
+
+export function hasOrIs(target, value) {
+  if (target === value) return true;
+  if (!(target instanceof BehaviorSubject)) return false;
+  return target.value === value;
 }
