@@ -7,7 +7,7 @@ import {
 
 import lGet from 'lodash/get';
 import {
-  identity, ACTION_NEXT, PHASE_ON, PHASE_DEFAULT_LIST, SKIP, UNHANDLED,
+  identity, ACTION_NEXT, PHASE_ON, PHASE_DEFAULT_LIST, SKIP, UNHANDLED, PHASE_INIT,
 } from './constants';
 import Event from './Event';
 
@@ -32,13 +32,12 @@ export default class Mirror extends BehaviorSubject {
     if (options) {
       this._$config(options);
     }
+    this._$value = value;
 
     this._$watchNext();
-
     this._$watchErrors();
 
     this._$constructed = true;
-    this._$value = value;
   }
 
   _$watchErrors() {
@@ -284,7 +283,7 @@ export default class Mirror extends BehaviorSubject {
   $trans(subject) {
     if (!subject || subject.isStopped) return this.$trans(new Subject());
 
-    const transSets = this._$activeTrans;
+    const transSets = new Set(this._$activeTrans);
     transSets.add(subject);
     const self = this;
     const stub = this.$subject; // insure updates of ._$next
@@ -327,8 +326,11 @@ export default class Mirror extends BehaviorSubject {
           distinctUntilChanged(),
         );
 
-      this._$$outThrottled.subscribe((v) => {
-        self._$value = v;
+      this._$$outThrottled.subscribe({
+        next(v) {
+          self._$value = v;
+        },
+        error() {},
       }, identity);
     }
 
@@ -420,11 +422,22 @@ export default class Mirror extends BehaviorSubject {
     this.$on(ACTION_NEXT, (evt) => {
       evt.subscribe({
         complete: () => {
-          super.next(evt.value);
+          if (!super.isStopped) super.next(evt.value);
         },
         error: () => {
         },
       });
     });
+  }
+
+  $onChange(fn) {
+    this.$on(ACTION_NEXT, (evt) => {
+      const result = fn(evt.value, evt);
+      // note -- if fn throws, update will not occur;
+      // this is an expected possibility.
+      if (typeof result !== 'undefined' && result !== evt.value) {
+        evt.next(result);
+      }
+    }, PHASE_INIT);
   }
 }

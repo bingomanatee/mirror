@@ -1,12 +1,16 @@
 /* eslint-disable camelcase */
-import { map } from 'rxjs/operators';
+
 import upperFirst from 'lodash/upperFirst';
 import lowerFirst from 'lodash/lowerFirst';
-import clone from 'lodash/clone';
+import flattenDeep from 'lodash/flattenDeep';
+
+import lEq from 'lodash/isEqual';
+
 import { BehaviorSubject } from 'rxjs';
+import { distinctUntilChanged, map } from 'rxjs/operators';
 import Mirror from './Mirror';
 import {
-  ACTION_CHANGE_KEYS, ACTION_CHILD_ERROR, ACTION_NEXT, identity, PHASE_POST, SKIP,
+  ACTION_CHANGE_KEYS, ACTION_CHILD_ERROR, ACTION_NEXT, identity, PHASE_INIT, PHASE_POST, SKIP,
 } from './constants';
 import { asMap, asObject, isObject } from './utils';
 
@@ -119,7 +123,7 @@ export default class MirrorCollection extends Mirror {
    */
   $changeKeys(changedKeyMap) {
     if (this.isStopped) return null;
-    const updateMap = asMap(this.value);
+    const updateMap = asMap(this.value, true);
     asMap(changedKeyMap)
       .forEach((value, key) => {
         try {
@@ -210,15 +214,16 @@ export default class MirrorCollection extends Mirror {
 
   /**
    * send an update request to a child;
-   * @param key
+   * @param key {*} the name of the child
    * @param value {*} the new child value
    * @returns {*}  the child's current value;
    */
   $updateChild(key, value) {
     if (!this.$hasChild(key)) return value;
     const child = this.$children.get(key);
-    if (child.value !== value) {
-      if (this.$isUpdatingChild(key)) return child.value;
+    if (this.$isUpdatingChild(key)) return child.value;
+
+    if (!lEq(child.value, value)) {
       const subject = this.$updateChildSubject(key);
       try {
         child.next(value); //  should trigger a muffled update.
@@ -232,15 +237,14 @@ export default class MirrorCollection extends Mirror {
 
   /**
    * an unguarded pipe to the root next of Mirror
-   * @param map
+   * @param val {Object | Map}
    */
   $next(val) {
     if (this.isStopped) {
       console.log('attempt to send value ', val, 'to stopped mirror', this.name);
       return;
-    };
-    const t = this.$trans();
-    try {
+    }
+    this.$transact(() => {
       const valMap = asMap(val);
       const next = new Map(valMap); // clone
 
@@ -256,11 +260,64 @@ export default class MirrorCollection extends Mirror {
       if (next.size) {
         super.next(this._$convert(next));
       }
-      t.complete();
-    } catch (err) {
-      console.log('error in $next', err, 'from', val);
-      t.error(err);
+    });
+  }
+
+  $watch(...args) {
+    const keys = flattenDeep(args);
+    if (!this._$watchers) this._$watchers = new Map();
+    const keySet = new Set(keys);
+    const watching = Array.from(this._$watchers.keys());
+
+    for (let wIndex = 0; wIndex < watching.length; ++wIndex) {
+      const wsKey = watching[wIndex];
+      if (lEq(wsKey, keySet)) {
+        return this._$watchers.get(wsKey);
+      }
     }
+
+    const subject = this;
+    const watchingKeys = this.pipe(
+      map((value) => {
+        const out = asMap(value, true);
+        Array.from(out.keys()).forEach((key) => {
+          if (!keys.includes(key)) out.delete(key);
+        });
+        return out;
+      }),
+      distinctUntilChanged((itemA, itemB) => {
+        for (let i = 0; i < keys.length; ++i) {
+          if (itemA.has(keys[i]) !== itemB.has(keys[i])) return false;
+          if (itemA.has(keys[i]) && !lEq(itemA.get(keys[i]), itemB.get(keys[i]))) {
+            return false;
+          }
+        }
+        return true;
+      }),
+      map((value) => subject._$convert(value)),
+    );
+
+    const sub = this.subscribe({
+      error() {
+        subject._$watchers.delete(keySet);
+      },
+      complete() {
+        subject._$watchers.delete(keySet);
+      },
+    });
+    watchingKeys.subscribe({
+      complete() {
+        subject._$watchers.delete(keySet);
+        sub.unsubscribe();
+      },
+      error() {
+        subject._$watchers.delete(keySet);
+        sub.unsubscribe();
+      },
+    });
+
+    this._$watchers.set(keySet, watchingKeys);
+    return watchingKeys;
   }
 
   /**
@@ -415,7 +472,8 @@ export default class MirrorCollection extends Mirror {
    */
   get $p() {
     if (!this._$p) {
-      const self = this;
+      // @TODO: non-proxy analog
+
       this._$p = new Proxy(this, {
         get(target, key) {
           if (key === '$base') return target;
@@ -508,7 +566,7 @@ export default class MirrorCollection extends Mirror {
   }
 
   /**
-   * in Looking Glass Engine `stream.my` was the reccommended read-only way to get a keyed value
+   * in Looking Glass Engine `stream.my` was the recommended read-only way to get a keyed value
    * regardless of whether the target was an object or a map; proxy does this (and more) so
    * $my is provided for backwards compatibility with LGE.
    *
@@ -522,5 +580,19 @@ export default class MirrorCollection extends Mirror {
   get my() {
     console.warn('my is deprecated; use $my or $p');
     return this.$p;
+  }
+
+  $onFieldChange(fn, field) {
+    this.$on(ACTION_CHANGE_KEYS, (evt) => {
+      if (evt.value.has(field)) {
+        const mappedValue = evt.value.get(field);
+        const newValue = fn(mappedValue, evt);
+        if (!lEq(newValue, mappedValue)) {
+          const newMap = new Map(evt.value);
+          newMap.set(field, newValue);
+          evt.next(newValue);
+        }
+      }
+    }, PHASE_INIT);
   }
 }

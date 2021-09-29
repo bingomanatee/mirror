@@ -247,6 +247,33 @@ tap.test(p.name, (suite) => {
 
         ch.end();
       });
+
+      mp.test('$watch', (wt) => {
+        const threeDPoint = new Subject(new Map([
+          ['x', 0],
+          ['y', 0],
+          ['z', 0],
+        ]));
+
+        const watcher = threeDPoint.$watch('x', 'y');
+        const [log, s] = watch(watcher);
+        wt.same(new Set(Array.from(log.history[0].keys())), new Set(['x', 'y']));
+        wt.same(log.history.length, 1);
+
+        threeDPoint.$do.setZ(3);
+        wt.same(log.history.length, 1);
+
+        threeDPoint.$do.setX(2);
+        wt.same(log.history.length, 2);
+        wt.same(new Set(Array.from(log.history[1].keys())), new Set(['x', 'y']));
+        wt.same(log.history[1].get('x'), 2);
+        wt.same(log.history[1].get('y'), 0);
+
+        threeDPoint.$do.setZ(6);
+        wt.same(log.history.length, 2);
+
+        wt.end();
+      });
       mp.end();
     });
 
