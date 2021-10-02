@@ -15,7 +15,16 @@ tap.test(p.name, (suite) => {
         const m = new Subject(1);
         cBasic.equal(m.value, 1);
         cBasic.same(m.$type, TYPE_VALUE);
+
+        m.next(2);
+        cBasic.equal(m.value, 2);
         cBasic.end();
+      });
+
+      tConst.test('config: name', (cName) => {
+        const m = new Subject(1, {name: 'Bob'});
+        cName.same(m.$name, 'Bob');
+        cName.end();
       });
 
       tConst.end();

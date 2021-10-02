@@ -5,3 +5,5 @@ export const TYPE_VALUE = Symbol('type:value');
 export const NAME_UNNAMED = Symbol('unnamed');
 
 export const ABSENT = Symbol('ABSENT');
+
+export const MUTATOR = Symbol('MUTATOR');
