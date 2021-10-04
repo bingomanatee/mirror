@@ -71,19 +71,19 @@ transmission.
 
 ### Premature termination of events
 
-If you have an action "setName", you may want to intercept the signal of name updates and stop any updates
-in which the name is set to a non-string value (array/number/object). You can actually do this with Sagas
+If you have an action "setName", you may want to intercept the signal of nameOrMirror updates and stop any updates
+in which the nameOrMirror is set to a non-string value (array/number/object). You can actually do this with Sagas
 but its extremely involved and requires extremely expert under-the-hood knowledge. 
 
 Not so with Mirror. You only need to know some easily discovered facts about how it operates:
 
 * all changes are accomplished by sending Events through the $events pipe. 
 * You can listen to any event (specifically, ACTION_CHANGE_KEYS and ACTION_NEXT) via the `$on(action, hook)` method
-* If you don't like the value of the name property in a change event you can 
+* If you don't like the value of the nameOrMirror property in a change event you can 
 
 1. reset it to its previous value (effectively no-op the change) 
 2. filter it to a proper value (stringify?) 
-3. cause the entire update to abort `event.error(new Error('bad name'))` and rollback that change and 
+3. cause the entire update to abort `event.error(new Error('bad nameOrMirror'))` and rollback that change and 
    potentially any associated update to stop execution
    
 Note - with option 3 you do put the onus on the calling code to observe any signals that emit and 
