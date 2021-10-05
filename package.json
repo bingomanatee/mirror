@@ -11,6 +11,7 @@
   ],
   "scripts": {
     "test": "NODE_ENV=test yarn build; tap test test/*",
+    "testi": "NODE_ENV=test yarn build; tap test test/*",
     "build": "node_modules/rollup/dist/bin/rollup -c='rollup.config.js'"
   },
   "dependencies": {
