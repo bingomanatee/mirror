@@ -1,6 +1,7 @@
-import { BehaviorSubject } from 'rxjs';
 import { isDraftable, produce } from 'immer';
+import { ABSENT, NAME_UNNAMED } from './constants';
 
+const isNumberLodash = require('lodash/isNumber');
 
 export function asMap(m, force) {
   if (m instanceof Map) {
@@ -12,6 +13,14 @@ export function asMap(m, force) {
   return map;
 }
 
+/** * ****************** INTROSPECTION ****************** */
+
+/**
+ * note - the tests isObject, isArray, isMap are EXCLUSIVE
+ * - only one (or none) of them should test true
+ * for any given target
+ */
+
 /**
  * returns true if the object is a POJO object -- that is,
  * its non-null, is an instance of Object, and is not an array.
@@ -20,11 +29,17 @@ export function asMap(m, force) {
  * @returns {boolean}
  */
 export function isObject(o) {
-  return o && (typeof o === 'object') && (!Array.isArray(o));
+  return o && (typeof o === 'object') && (!Array.isArray(o)) && (!(o instanceof Map));
 }
 
-export function isArray(a) {
-  return Array.isArray(a);
+/**
+ * a type check; if nonEmpty = true, only true if array has indexed values.
+ * @param a
+ * @param nonEmpty
+ * @returns {boolean}
+ */
+export function isArray(a, nonEmpty = false) {
+  return Array.isArray(a) && (!nonEmpty || a.length);
 }
 
 export const isMap = (m) => m && (m instanceof Map);
@@ -35,6 +50,13 @@ export const e = (err, notes = {}) => {
   if (typeof err === 'string') err = new Error(err);
   return Object.assign(err, notes);
 };
+
+export function isString(s, nonEmpty = false) {
+  if (typeof s === 'string') {
+    return nonEmpty ? !!s : true;
+  }
+  return false;
+}
 
 /**
  * returns a POJO object equivalent to the input;
@@ -77,15 +99,21 @@ export function asUserAction(str) {
   return str;
 }
 
-export function hasOrIs(target, value) {
-  if (target === value) return true;
-  if (!(target instanceof BehaviorSubject)) return false;
-  return target.value === value;
-}
-
 export const noop = (n) => n;
 
 export function maybeImmer(target) {
   if (!isDraftable(target)) return target;
   return produce(target, noop);
+}
+
+export const isNumber = isNumberLodash;
+
+/**
+ * returns true unless item is ABSENT or undefined;
+ *
+ * @param item {any}
+ * @returns {boolean}
+ */
+export function present(item) {
+  return ![ABSENT, NAME_UNNAMED, undefined].includes(item);
 }

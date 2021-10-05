@@ -1,8 +1,11 @@
 import { BehaviorSubject } from 'rxjs';
-import { asMap, e, hasOrIs } from './utils';
+import {
+  asMap, e, isString, present,
+} from './utils';
 import {
   ABSENT, TYPE_MAP, TYPE_OBJECT, TYPE_VALUE,
 } from './constants';
+import { hasOrIs } from './mirrorMisc';
 
 
 export function setParent(newParent, target, Mirror) {
@@ -58,28 +61,60 @@ export function hasChild(key, value, target) {
   return hasOrIs(child, value);
 }
 
-export function updateChildren(value, target) {
+/**
+ * seed child mirrors with the value of an injected value -- OR the current
+ * target's value. Can be used to "reset" globally a target to a known state.
+ * note -- doesn't commit the values - leaves them across the Mirror network as pending changes
+ *
+ * @param value {Object | Map}
+ * @param target
+ * @param returnNewFields
+ */
+
+export function updateChildren(value = ABSENT, target, returnNewFields = false) {
   if (target.$isValue) {
     throw new Error('do not call $updateChildren on a TYPE_VALUE; use next instead');
   }
-
-  const badFields = [];
-  const map = asMap(value);
-  map.forEach((keyValue, newKey) => {
-    if (!target.$has(newKey)) badFields.push(newKey);
-  });
-
-  if (badFields.length) {
-    throw e('invalid $updateChildren - unknown fields; use $addChildren on new fields', {
-      badFields,
-      target,
-    });
+  if (!present(value)) {
+    if (value !== target.value) {
+      updateChildren(target.value, target, returnNewFields);
+      return;
+    }
   }
 
-  map.forEach((keyValue, key) => {
-    target.$children.get(key)
-      .next(keyValue);
-  });
+  const badFields = [];
+
+  try {
+    // queue all the children indicated in value as pending changes.
+    asMap(value).forEach((keyValue, newKey) => {
+      if ((target.$has(newKey))) {
+        const child = target.$children.get(newKey);
+        child.$try(keyValue);
+      } else {
+        badFields.push(newKey);
+      }
+    });
+
+    if (badFields.length) {
+      if (!returnNewFields) {
+        throw e('invalid $updateChildren - unknown fields; use $addChildren on new fields', {
+          badFields,
+        });
+      }
+    }
+
+    const { $errors: targetErrors, $childErrors: childErrors } = target;
+    if (targetErrors || childErrors) {
+      throw e('errors in target and/or child', { targetErrors, childErrors });
+    }
+  } catch (err) {
+    target.$_log(2, 'error in updating target from child values',
+      {
+        value, targetValue: target.value, err,
+      });
+    target.$revert();
+    throw err;
+  }
 }
 
 /**
@@ -132,7 +167,11 @@ export function addChild(name, value, target, Mirror) {
       break;
 
     case TYPE_VALUE:
-      throw e('cannot add children to a value Mirror', { target, name, value });
+      throw e('cannot add children to a value Mirror', {
+        target,
+        name,
+        value,
+      });
       // eslint-disable-next-line no-unreachable
       break;
 
@@ -170,7 +209,8 @@ export function addChild(name, value, target, Mirror) {
   // @TODO: prevent/warn renaming after constructor?
   target.$children.set(name, value); // @TODO: use an add event
   if (value instanceof Mirror) {
-    value.$_setName(name);
+    // eslint-disable-next-line no-param-reassign
+    value.$_name = name;
     value.$setParent(target);
   }
 
@@ -180,7 +220,8 @@ export function addChild(name, value, target, Mirror) {
     },
     error(err) {
       target.$_log('error in child observer', {
-        err, name,
+        err,
+        name,
       });
     },
     complete() {

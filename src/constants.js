@@ -6,4 +6,4 @@ export const NAME_UNNAMED = Symbol('unnamed');
 
 export const ABSENT = Symbol('ABSENT');
 
-export const MUTATOR = Symbol('MUTATOR');
+export const CHILDREN = Symbol('CHILDREN');
