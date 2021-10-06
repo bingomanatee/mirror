@@ -1,12 +1,9 @@
 /* eslint-disable no-param-reassign */
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, of, Subject } from 'rxjs';
+import { catchError, filter, switchMap } from 'rxjs/operators';
+import { isFunction, isMap, isObject } from './utils';
 import {
-  asMap, isArray, isFunction, isMap, isObject, present,
-} from './utils';
-import {
-  ABSENT,
-  CHILDREN,
-  NAME_UNNAMED, TYPE_MAP, TYPE_OBJECT, TYPE_VALUE,
+  ABSENT, NAME_UNNAMED, TYPE_MAP, TYPE_OBJECT, TYPE_VALUE,
 } from './constants';
 
 export function mirrorType(target, value = ABSENT) {
@@ -95,26 +92,32 @@ export function parseConfig(target, config = {}) {
   }
 }
 
+export function testProjector(target) {
+  return (value) => of(value)
+    .pipe(
+      filter((v) => {
+        if (isFunction(target.$test)) return !target.$test(v);
+        return true;
+      }),
+      catchError(() => of()),
+    );
+}
+
 
 export function initQueue(target) {
-  target.$__queue = new BehaviorSubject(ABSENT);
-  target.$__queueSub = target.$__queue.subscribe({
-    next(pendingValue) {
-      if (!target.isStopped) {
-        if (present(pendingValue)) {
-          target.$try(pendingValue);
-        }
-      }
+  target.$__queue = new Subject()
+    .pipe(
+      switchMap(testProjector(target)),
+    );
+
+  target.$__queue.subscribe({
+    next(value) {
+      target.$commit(value);
     },
-    error(err) {
-      if (target.isStopped) return;
-      target.$reset();
-      target.$__queue = null;
+    error() {
     },
     complete() {
-      if (!target.isStopped) {
-        target.$__queue = null;
-      }
+      target.$__queue = null;
     },
   });
 }

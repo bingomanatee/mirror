@@ -12,6 +12,8 @@ const {
   mirrorWatcher,
 } = lib;
 
+const NNV = 'non-numeric value';
+
 const Subject = lib[subjectName];
 tap.test(p.name, (suite) => {
   suite.test(`${subjectName} (Value type)`, (suiteTests) => {
@@ -35,21 +37,12 @@ tap.test(p.name, (suite) => {
       tConst.end();
     });
 
-    suiteTests.test('test - observed', (tTest) => {
+    suiteTests.test('test (next)', (tTest) => {
       const m = new Subject(1, {
         name: 'Testy',
         test: (v) => {
           if (!utils.isNumber(v)) throw new Error('non-numeric value');
         },
-      });
-      // mirrorWatcher(m);
-      // m.$$watcher.subscribe((data) => {
-      //   process.nextTick(() => {
-      //     console.log(data.name, '--- observed ', data.source, ':', data.message, utils.present(data.value) ? data.value : '', '((value = ', data.mirrorValue, '))');
-      //   });
-      // });
-      m.subscribe((v) => {
-        process.nextTick(() => console.log('---- value emitted from ', m.$name, ':', v));
       });
 
       const [{
@@ -70,11 +63,198 @@ tap.test(p.name, (suite) => {
       tTest.same(m.value, 2);
       tTest.same(errors.length, 0);
       tTest.same(history, [1, 2]);
-
       m.next(4);
       tTest.same(m.value, 4);
       tTest.same(errors.length, 0);
       tTest.same(history, [1, 2, 4]);
+
+      m.complete();
+      tTest.end();
+    });
+
+    suiteTests.test('test ($try)', (tTest) => {
+      const m = new Subject(1, {
+        name: 'Testy$try',
+        test: (v) => {
+          if (!utils.isNumber(v)) throw new Error('non-numeric value');
+        },
+      });
+
+      const [{
+        history,
+        errors,
+      }] = watch(m);
+
+      tTest.same(errors.length, 0);
+      tTest.same(history, [1]);
+      tTest.same(m.value, 1);
+      tTest.notOk(m.$isTrying);
+
+      m.$try(2);
+      tTest.same(m.value, 2);
+      tTest.same(errors.length, 0);
+      tTest.same(history, [1]);
+      tTest.ok(m.$isTrying);
+
+      m.$flush();
+
+      tTest.same(m.value, 2);
+      tTest.same(errors.length, 0);
+      tTest.same(history, [1, 2]);
+      tTest.notOk(m.$isTrying);
+
+      m.$try('three');
+      tTest.same(m.value, 'three');
+      tTest.same(errors.length, 0);
+      tTest.same(history, [1, 2]);
+
+      m.$flush();
+      tTest.same(m.value, 2);
+      tTest.same(errors.length, 0);
+      tTest.same(history, [1, 2]);
+      tTest.notOk(m.$isTrying);
+
+      m.$try(4);
+      tTest.same(m.value, 4);
+      tTest.same(errors.length, 0);
+      tTest.same(history, [1, 2]);
+      tTest.ok(m.$isTrying);
+
+      m.$flush();
+      tTest.same(m.value, 4);
+      tTest.same(errors.length, 0);
+      tTest.same(history, [1, 2, 4]);
+      tTest.notOk(m.$isTrying);
+
+      m.complete();
+      tTest.end();
+    });
+
+    suiteTests.test('test ($try/$catch)', (tTest) => {
+      const m = new Subject(1, {
+        name: 'Testy$try$catch',
+        test: (v) => {
+          if (!utils.isNumber(v)) throw new Error(NNV);
+        },
+      });
+
+      const [{
+        history,
+        errors,
+      }] = watch(m);
+      let caughtError = '';
+      function doCatch(err) {
+        caughtError = err;
+      }
+
+      tTest.same(errors.length, 0);
+      tTest.same(history, [1]);
+      tTest.same(m.value, 1);
+      tTest.notOk(m.$isTrying);
+
+      m.$try(2).$catch(doCatch);
+      tTest.same(m.getValue(), 2);
+      tTest.same(errors.length, 0);
+      tTest.same(history, [1]);
+      tTest.ok(m.$isTrying);
+      tTest.same(caughtError, '');
+
+      m.$flush();
+      tTest.same(m.getValue(), 2);
+      tTest.same(errors.length, 0);
+      tTest.same(history, [1, 2]);
+      tTest.notOk(m.$isTrying);
+      tTest.same(caughtError, '');
+
+      m.$try('three').$catch(doCatch);
+      tTest.same(m.value, 2);
+      tTest.same(errors.length, 0);
+      tTest.same(caughtError, new Error(NNV));
+      tTest.same(history, [1, 2]);
+      tTest.notOk(m.$isTrying);
+
+      caughtError = '';
+      m.$flush();
+      tTest.same(m.value, 2);
+      tTest.same(errors.length, 0);
+      tTest.same(history, [1, 2]);
+      tTest.notOk(m.$isTrying);
+
+      m.$try(4).$catch(doCatch);
+      tTest.same(m.value, 4);
+      tTest.same(errors.length, 0);
+      tTest.same(history, [1, 2]);
+      tTest.same(caughtError, '');
+      tTest.ok(m.$isTrying);
+
+      m.$flush();
+      tTest.same(m.value, 4);
+      tTest.same(errors.length, 0);
+      tTest.same(history, [1, 2, 4]);
+      tTest.notOk(m.$isTrying);
+
+      m.complete();
+      tTest.end();
+    });
+
+    suiteTests.test('test ($try/$then/$catch)', (tTest) => {
+      const m = new Subject(1, {
+        name: 'ttc',
+        test: (v) => {
+          if (!utils.isNumber(v)) throw new Error(NNV);
+        },
+      });
+
+      const [{
+        history,
+        errors,
+      }] = watch(m);
+      let caughtError = '';
+      let thenHappened = false;
+
+      function doThen() {
+        thenHappened = true;
+      }
+
+      function saveError(err) {
+        caughtError = err;
+      }
+
+      tTest.same(errors.length, 0);
+      tTest.same(history, [1]);
+      tTest.same(m.value, 1);
+      tTest.notOk(m.$isTrying);
+
+      m.$try(2).$then(doThen).$catch(saveError);
+      tTest.same(m.getValue(), 2);
+      tTest.same(errors.length, 0);
+      tTest.same(history, [1, 2]);
+
+      tTest.notOk(m.$isTrying);
+      tTest.notOk(caughtError);
+      tTest.ok(thenHappened);
+
+      thenHappened = false;
+      m.$try('three').$then(doThen).$catch(saveError);
+      tTest.same(m.value, 2);
+      tTest.same(errors.length, 0);
+
+      tTest.same(caughtError, new Error(NNV));
+      tTest.notOk(m.$isTrying);
+      tTest.notOk(thenHappened);
+
+      tTest.same(history, [1, 2]);
+      tTest.notOk(m.$isTrying);
+
+      caughtError = '';
+      m.$try(4).$then(doThen).$catch(saveError);
+      tTest.same(m.value, 4);
+      tTest.same(errors.length, 0);
+      tTest.same(history, [1, 2, 4]);
+
+      tTest.notOk(m.$isTrying);
+      tTest.notOk(caughtError);
+      tTest.ok(thenHappened);
 
       m.complete();
       tTest.end();
