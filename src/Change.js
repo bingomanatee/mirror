@@ -2,7 +2,7 @@ import { BehaviorSubject } from 'rxjs';
 import { compact, flattenDeep, uniq } from 'lodash';
 import { ABSENT } from './constants';
 import {
-  isArray, isFunction, isObject, noop,
+  isArr, isFn, isObj, noop,
 } from './utils';
 
 console.log();
@@ -54,7 +54,7 @@ export class Action extends BehaviorSubject {
           return;
         }
         result.push(prior);
-      } else if (isFunction(item)) {
+      } else if (isFn(item)) {
         try {
           prior = item(this, prior, previous);
           result.push(prior);

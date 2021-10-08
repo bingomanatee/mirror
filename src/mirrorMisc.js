@@ -1,7 +1,7 @@
 /* eslint-disable no-param-reassign */
 import { BehaviorSubject, of, Subject } from 'rxjs';
 import { catchError, filter, switchMap } from 'rxjs/operators';
-import { isFunction, isMap, isObject } from './utils';
+import { isFn, isMap, isObj } from './utils';
 import {
   ABSENT, NAME_UNNAMED, TYPE_MAP, TYPE_OBJECT, TYPE_VALUE,
 } from './constants';
@@ -12,7 +12,7 @@ export function mirrorType(target, value = ABSENT) {
   if (isMap(value)) {
     return TYPE_MAP;
   }
-  if (isObject(value)) {
+  if (isObj(value)) {
     return TYPE_OBJECT;
   }
   return TYPE_VALUE;
@@ -49,7 +49,7 @@ export function parseConfig(target, config = {}) {
   target.$_name = NAME_UNNAMED;
   target.$_debug = false;
 
-  if (isObject(config)) {
+  if (isObj(config)) {
     Object.keys(config)
       .forEach((key) => {
         const fieldValue = config[key];
@@ -96,7 +96,7 @@ export function testProjector(target) {
   return (value) => of(value)
     .pipe(
       filter((v) => {
-        if (isFunction(target.$test)) return !target.$test(v);
+        if (isFn(target.$test)) return !target.$test(v);
         return true;
       }),
       catchError(() => of()),

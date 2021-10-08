@@ -3,7 +3,7 @@ import { ABSENT, NAME_UNNAMED } from './constants';
 
 const isNumberLodash = require('lodash/isNumber');
 
-export function asMap(m, force) {
+export function toMap(m, force) {
   if (m instanceof Map) {
     return force ? new Map(m) : m;
   }
@@ -16,7 +16,7 @@ export function asMap(m, force) {
 /** * ****************** INTROSPECTION ****************** */
 
 /**
- * note - the tests isObject, isArray, isMap are EXCLUSIVE
+ * note - the tests isObj, isArr, isMap are EXCLUSIVE
  * - only one (or none) of them should test true
  * for any given target
  */
@@ -28,7 +28,7 @@ export function asMap(m, force) {
  * @param o
  * @returns {boolean}
  */
-export function isObject(o) {
+export function isObj(o) {
   return o && (typeof o === 'object') && (!Array.isArray(o)) && (!(o instanceof Map));
 }
 
@@ -38,20 +38,20 @@ export function isObject(o) {
  * @param nonEmpty
  * @returns {boolean}
  */
-export function isArray(a, nonEmpty = false) {
+export function isArr(a, nonEmpty = false) {
   return Array.isArray(a) && (!nonEmpty || a.length);
 }
 
 export const isMap = (m) => m && (m instanceof Map);
 
-export const isFunction = (f) => typeof f === 'function';
+export const isFn = (f) => typeof f === 'function';
 
 export const e = (err, notes = {}) => {
   if (typeof err === 'string') err = new Error(err);
   return Object.assign(err, notes);
 };
 
-export function isString(s, nonEmpty = false) {
+export function isStr(s, nonEmpty = false) {
   if (typeof s === 'string') {
     return nonEmpty ? !!s : true;
   }
@@ -68,12 +68,12 @@ export function isString(s, nonEmpty = false) {
  * @param force {boolean} returns a clone of an input object; otherwise is a noop for POJOS
  * @returns {Object}
  */
-export function asObject(m, force = false) {
-  if (!(isObject(m) || isMap(m))) {
+export function toObj(m, force = false) {
+  if (!(isObj(m) || isMap(m))) {
     throw Object.assign(new Error('cannot convert target to object'), { target: m });
   }
   let out = m;
-  if (isObject(m)) {
+  if (isObj(m)) {
     if (force) out = { ...m };
   } else if (isMap(m)) {
     out = {};
@@ -84,7 +84,7 @@ export function asObject(m, force = false) {
       try {
         out[key] = val;
       } catch (e) {
-        console.warn('asObject map/object conversion -- skipping exporting of child key', key, 'of ', m);
+        console.warn('toObj map/object conversion -- skipping exporting of child key', key, 'of ', m);
       }
     });
   }
@@ -114,6 +114,6 @@ export const isNumber = isNumberLodash;
  * @param item {any}
  * @returns {boolean}
  */
-export function present(item) {
+export function there(item) {
   return ![ABSENT, NAME_UNNAMED, undefined].includes(item);
 }

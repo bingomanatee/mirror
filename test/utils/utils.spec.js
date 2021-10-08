@@ -32,11 +32,11 @@ tap.test(p.name, (suite) => {
       i.ok(Subject.isMap(myMap));
       all.filter((n) => n !== myMap).forEach((type) => i.notOk(Subject.isMap(type)));
 
-      i.ok(Subject.isObject(myObj));
-      all.filter((n) => n !== myObj).forEach((type) => i.notOk(Subject.isObject(type)));
+      i.ok(Subject.isObj(myObj));
+      all.filter((n) => n !== myObj).forEach((type) => i.notOk(Subject.isObj(type)));
 
-      i.ok(Subject.isArray(myArray));
-      all.filter((n) => n !== myArray).forEach((type) => i.notOk(Subject.isArray(type)));
+      i.ok(Subject.isArr(myArray));
+      all.filter((n) => n !== myArray).forEach((type) => i.notOk(Subject.isArr(type)));
 
       i.end();
     });

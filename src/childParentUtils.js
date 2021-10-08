@@ -1,6 +1,6 @@
 import { BehaviorSubject } from 'rxjs';
 import {
-  asMap, e, isString, present,
+  toMap, e, isStr, there,
 } from './utils';
 import {
   ABSENT, TYPE_MAP, TYPE_OBJECT, TYPE_VALUE,
@@ -40,8 +40,8 @@ export function mirrorHas(field, target) {
  * returns true if:
  *
  * 1) value is absent and key is a valid child
- * 2) value is present and is (the mirror that)  is stored in target.$children.get(key);
- * 3) value is present and is the VALUE OF THE MIRROR that is stored in target.$children.get(key);
+ * 2) value is there and is (the mirror that)  is stored in target.$children.get(key);
+ * 3) value is there and is the VALUE OF THE MIRROR that is stored in target.$children.get(key);
  *
  * @param key {any}
  * @param value {any|Mirror}
@@ -75,7 +75,7 @@ export function updateChildren(value = ABSENT, target, returnNewFields = false) 
   if (target.$isValue) {
     throw new Error('do not call $updateChildren on a TYPE_VALUE; use next instead');
   }
-  if (!present(value)) {
+  if (!there(value)) {
     if (value !== target.value) {
       updateChildren(target.value, target, returnNewFields);
       return;
@@ -86,7 +86,7 @@ export function updateChildren(value = ABSENT, target, returnNewFields = false) 
 
   try {
     // queue all the children indicated in value as pending changes.
-    asMap(value).forEach((keyValue, newKey) => {
+    toMap(value).forEach((keyValue, newKey) => {
       if ((target.$has(newKey))) {
         const child = target.$children.get(newKey);
         child.$try(keyValue);

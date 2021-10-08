@@ -1,5 +1,5 @@
 import { Subject } from 'rxjs';
-import { isObject, present } from './utils';
+import { isObj, there } from './utils';
 import { ABSENT } from './constants';
 
 export default function mirrorWatcher(mirror) {
@@ -22,7 +22,7 @@ export default function mirrorWatcher(mirror) {
   });
   Object.defineProperty(mirror, '$$say', {
     value: (message, source, value = ABSENT) => {
-      if (isObject(message)) {
+      if (isObj(message)) {
         source = message.source;
         value = message.value;
         message = message.message;
@@ -31,7 +31,7 @@ export default function mirrorWatcher(mirror) {
       mirror.$$watcher.next({
         message,
         source,
-        value: present(value) ? value : message.value,
+        value: there(value) ? value : message.value,
         mirrorValue: mirror.value,
         name: mirror.$name,
       });

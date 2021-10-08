@@ -2,18 +2,19 @@
 // noinspection UnreachableCodeJS
 
 import { BehaviorSubject, Subject } from 'rxjs';
-import { enableMapSet } from 'immer';
+import produce, { enableMapSet } from 'immer';
 
 enableMapSet();
 import {
   ABSENT, CHILDREN,
-  NAME_UNNAMED, TYPE_MAP, TYPE_OBJECT, TYPE_VALUE,
+  NAME_UNNAMED, STAGE_PERFORM, TYPE_MAP, TYPE_OBJECT, TYPE_VALUE,
 } from './constants';
 import {
-  asMap, asObject, isMap, isObject, noop, maybeImmer, e, isFunction, present
+  toMap, toObj, isMap, isObj, noop, maybeImmer, e, isFn, there, isArr
 } from './utils';
 // import { addChild, hasChild, mirrorHas, removeChild, setParent, updateChildren } from './childParentUtils';
-import {  mirrorType, initQueue } from './mirrorMisc';
+import { mirrorType, initQueue } from './mirrorMisc';
+import { filter } from 'rxjs/operators';
 
 /**
  * Mirror is a special extension of BehaviorSubject; it shards its sub-properties into children
@@ -24,21 +25,28 @@ export default class Mirror extends BehaviorSubject {
   constructor(value, config = ABSENT) {
     super(value);
     this.$configure(config);
+    this.$_constructed = true;
   }
 
   $configure(config = {}) {
     this.$type = mirrorType(this, this.value);
-    if (!(isObject(config) || (isMap(config)))) {
+    if (!(isObj(config) || (isMap(config)))) {
       return this.$configure({});
     }
     const {
       name = NAME_UNNAMED,
       test = ABSENT,
       type = ABSENT
-    } = asObject(config);
-    if (present(name)) this.$name = name;
-    if (present(test)) this.$_test = test;
-    if (present(type)) this.$type = type;
+    } = toObj(config);
+    if (there(name)) {
+      this.$name = name;
+    }
+    if (there(test)) {
+      this.$_test = test;
+    }
+    if (there(type)) {
+      this.$type = type;
+    }
   }
 
   /**
@@ -46,7 +54,7 @@ export default class Mirror extends BehaviorSubject {
    * @returns {undefined|function}
    */
   get $test() {
-    return isFunction(this.$_test) ? this.$_test : undefined;
+    return isFn(this.$_test) ? this.$_test : undefined;
   }
 
   /**
@@ -63,7 +71,25 @@ export default class Mirror extends BehaviorSubject {
   };
 
   next(nextValue) {
-    this.$_queue.next(nextValue);
+    if (!this.$_constructed) {
+      // do not validate first value; accept it no matter what
+      super.next(nextValue);
+    }
+    else {
+      this.$_queue.next(nextValue);
+    }
+  }
+
+  $mutate(fn) {
+    this.$_mutationQueue.next(Event.$perform(fn, 'mutate', this));
+    return this;
+  }
+
+  get $_mutationQueue() {
+    if (!this.$__mutationQueue) {
+      this.$__mutationQueue = new BehaviorSubject([]);
+    }
+    return this.$__mutationQueue;
   }
 
   /** *************** try/catch ****************** */
@@ -71,7 +97,7 @@ export default class Mirror extends BehaviorSubject {
   /**
    * ordinarily when you next(), the value is submitted synchronously.
    * $try(v).$then(fn).$catch(fn).$finally(fn);
-   * allows you to react dynamically to errors if present before bad data is rejected.
+   * allows you to react dynamically to errors if there before bad data is rejected.
    *
    * ---- implicit actions
    * ---- $try(v) submits the value to trial value; the value of the Mirror is then locked in to the new value,
@@ -112,16 +138,53 @@ export default class Mirror extends BehaviorSubject {
   $try(value, thenFn, catchFn, finalFn) {
     this.$_thenCalled = false;
     this.$_trialValue = value;
-    if (isFunction(thenFn)) {
+    if (isFn(thenFn)) {
       this.$then(thenFn);
     }
-    if (isFunction(catchFn)) {
+    if (isFn(catchFn)) {
       this.$catch(catchFn);
     }
-    if (isFunction(finalFn)) {
+    if (isFn(finalFn)) {
       this.$finally(finalFn);
     }
     return this;
+  }
+
+  get $_eventQueue() {
+    if (!this.$__eventQueue) {
+      this.$__eventQueue = new BehaviorSubject(ABSENT);
+      this.$on('fn');
+    }
+    return this.$__eventQueue;
+  }
+
+  $on(type, stage = STAGE_PERFORM, test = ABSENT) {
+    const subject = this;
+    this.$_eventQueue.pipe(filter((phase) => {
+      if (!(phase.type === type)) {
+        return false;
+      }
+      if (isArr(stage)) {
+        return stage.includes(phase.stage);
+      }
+      else if (!(phase.stage === stage)) {
+        return false;
+      }
+      if (isFn(test)) {
+        return test(phase.value, phase, subject);
+      }
+      return true;
+    }));
+  }
+
+  $do(fn, ...args) {
+    const event = new Event((value) => fn(value, this, ...args), 'fn');
+    event.$perform()
+      .subscribe((phase) => {
+        if (!this.isStopped) {
+          this.$_eventQueue.next(phase);
+        }
+      });
   }
 
   $then(fn) {
@@ -136,20 +199,25 @@ export default class Mirror extends BehaviorSubject {
     const errs = this.$errors();
     if (errs) {
       fn(errs, this.value, this);
-      if (!noClear) this.$clearTrial();
+      if (!noClear) {
+        this.$clearTrial();
+      }
     }
     return this;
   }
 
   $_do(fn, ...args) {
-    if (isFunction(fn)) try {
-      if (args.length) {
-        fn(...args);
-      } else {
-        fn(this, this.value);
+    if (isFn(fn)) {
+      try {
+        if (args.length) {
+          fn(...args);
+        }
+        else {
+          fn(this, this.value);
+        }
+      } catch (err) {
+        console.warn(err);
       }
-    } catch(err) {
-      console.warn(err)
     }
   }
 
@@ -160,10 +228,10 @@ export default class Mirror extends BehaviorSubject {
   }
 
   $errors(candidate = ABSENT) {
-    if (!present(candidate)) {
+    if (!there(candidate)) {
       candidate = this.getValue();
     }
-    if (!isFunction(this.$test)) {
+    if (!isFn(this.$test)) {
       return false;
     }
     try {
@@ -174,18 +242,18 @@ export default class Mirror extends BehaviorSubject {
   }
 
   get $isTrying() {
-    return present(this.$_trialValue);
+    return there(this.$_trialValue);
   }
 
   $isValid(candidate = ABSENT) {
-    if (!present(candidate)) {
+    if (!there(candidate)) {
       candidate = this.getValue();
     }
     return !this.$errors(candidate);
   }
 
   getValue() {
-    if (present(this.$_trialValue)) {
+    if (there(this.$_trialValue)) {
       return this.$_trialValue;
     }
     return super.getValue();
@@ -197,9 +265,10 @@ export default class Mirror extends BehaviorSubject {
    * @param value
    */
   $commit(value = ABSENT) {
-    if (present(value)) {
+    if (there(value)) {
       super.next(value);
-    } else if (this.$isTrying) {
+    }
+    else if (this.$isTrying) {
       super.next(this.$_trialValue);
     }
     this.$clearTrial();
@@ -211,7 +280,7 @@ export default class Mirror extends BehaviorSubject {
       if (!this.$errors()) {
         this.$commit();
       }
-      this.$clearTrial()
+      this.$clearTrial();
     }
     return this;
   }

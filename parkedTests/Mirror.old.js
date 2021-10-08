@@ -176,8 +176,8 @@ export default class Mirror extends BehaviorSubject {
    * returns true if:
    *
    * 1) value is absent and key is a valid child
-   * 2) value is present and is (the mirror that)  is stored in this.$children.get(key);
-   * 3) value is present and is the VALUE OF THE MIRROR that is stored in this.$children.get(key);
+   * 2) value is there and is (the mirror that)  is stored in this.$children.get(key);
+   * 3) value is there and is the VALUE OF THE MIRROR that is stored in this.$children.get(key);
    *
    * @param key {any}
    * @param value {any|Mirror}
@@ -259,7 +259,7 @@ export default class Mirror extends BehaviorSubject {
     }
 
     if (!this.$has(field)) {
-      this.$_log(0, 'attempt to get non-present child', { field });
+      this.$_log(0, 'attempt to get non-there child', { field });
       return undefined;
     }
     return this.$children.get(field).value;
@@ -277,7 +277,7 @@ export default class Mirror extends BehaviorSubject {
     }
 
     if (!this.$has(field)) {
-      this.$_log(0, 'attempt to get non-present child', { field });
+      this.$_log(0, 'attempt to get non-there child', { field });
       return undefined;
     }
     return this.$children.get(field);
@@ -442,7 +442,7 @@ export default class Mirror extends BehaviorSubject {
   }
   //
   // $_updateFields(collection) {
-  //   const changes = asMap(collection);
+  //   const changes = toMap(collection);
   //   switch (this.$type) {
   //     case TYPE_OBJECT:
   //       let nextObject = { ...this.value };
