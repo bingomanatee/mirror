@@ -1,9 +1,12 @@
 import tap from 'tap';
 import { basename } from 'path';
+import { STAGE_ERROR, STAGE_VALIDATE } from '../src/constants';
+import { e } from '../src/utils';
 
 const p = require('../package.json');
 
-const subjectName = basename(__filename).replace(/\..*$/, '');
+const subjectName = basename(__filename)
+  .replace(/\..*$/, '');
 const lib = require('../lib');
 
 const { TYPE_VALUE } = lib;
@@ -20,21 +23,6 @@ tap.test(p.name, (suite) => {
       tC.same(event.$target, MOCK_TARGET);
       tC.notOk(event.isStopped);
       tC.end();
-    });
-
-    suiteTests.test('$perform', (pe) => {
-      const MOCK_TARGET = {};
-
-      const event = new Subject(1, 'number', MOCK_TARGET);
-
-      const stages = [];
-
-      event.$perform().subscribe(({ stage }) => stages.push(stage));
-      pe.same(stages, 'init,validate,perform,post,final'.split(','));
-      event.next(3);
-      pe.same(stages, 'init,validate,perform,post,final'.split(','));
-
-      pe.end();
     });
 
     suiteTests.end();

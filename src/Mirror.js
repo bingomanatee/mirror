@@ -1,20 +1,31 @@
 /* eslint-disable */
 // noinspection UnreachableCodeJS
 
-import { BehaviorSubject, Subject } from 'rxjs';
+import { BehaviorSubject, combineLatest, combineLatestWith, from, of, Subject } from 'rxjs';
 import produce, { enableMapSet } from 'immer';
 
 enableMapSet();
 import {
-  ABSENT, CHILDREN,
-  NAME_UNNAMED, STAGE_PERFORM, TYPE_MAP, TYPE_OBJECT, TYPE_VALUE,
+  ABSENT,
+  CHILDREN,
+  NAME_UNNAMED,
+  STAGE_ERROR,
+  STAGE_FINAL,
+  STAGE_INIT,
+  STAGE_PERFORM,
+  STAGE_POST,
+  STAGE_VALIDATE,
+  TYPE_MAP,
+  TYPE_OBJECT,
+  TYPE_VALUE,
 } from './constants';
 import {
-  toMap, toObj, isMap, isObj, noop, maybeImmer, e, isFn, there, isArr
+  toMap, toObj, isMap, isObj, noop, maybeImmer, e, isFn, there, isArr, isStr
 } from './utils';
 // import { addChild, hasChild, mirrorHas, removeChild, setParent, updateChildren } from './childParentUtils';
 import { mirrorType, initQueue } from './mirrorMisc';
-import { filter } from 'rxjs/operators';
+import { catchError, distinctUntilKeyChanged, filter, map, switchMap, finalize, tap } from 'rxjs/operators';
+import Event from './Event';
 
 /**
  * Mirror is a special extension of BehaviorSubject; it shards its sub-properties into children
@@ -80,18 +91,6 @@ export default class Mirror extends BehaviorSubject {
     }
   }
 
-  $mutate(fn) {
-    this.$_mutationQueue.next(Event.$perform(fn, 'mutate', this));
-    return this;
-  }
-
-  get $_mutationQueue() {
-    if (!this.$__mutationQueue) {
-      this.$__mutationQueue = new BehaviorSubject([]);
-    }
-    return this.$__mutationQueue;
-  }
-
   /** *************** try/catch ****************** */
 
   /**
@@ -150,31 +149,96 @@ export default class Mirror extends BehaviorSubject {
     return this;
   }
 
+  /**
+   *
+   * @returns {Observable}
+   */
   get $_eventQueue() {
     if (!this.$__eventQueue) {
-      this.$__eventQueue = new BehaviorSubject(ABSENT);
-      this.$on('fn');
+      const target = this;
+      this.$__eventQueue = new Subject()
+        .pipe(
+          switchMap((value) => from([value])
+            .pipe(catchError(err => from([])))),
+        );
     }
     return this.$__eventQueue;
   }
 
-  $on(type, stage = STAGE_PERFORM, test = ABSENT) {
-    const subject = this;
-    this.$_eventQueue.pipe(filter((phase) => {
-      if (!(phase.type === type)) {
-        return false;
+  $event(type, value = ABSENT) {
+    let stages = [STAGE_INIT, STAGE_VALIDATE, STAGE_PERFORM, STAGE_POST, STAGE_FINAL];
+    const target = this;
+    for (let i = 0; i < stages.length; ++i) {
+      const event = new Event(value, type, this);
+      event.$stage = stages[i];
+      event.subscribe({
+        error(err) {
+          target.$_eventQueue.next({
+            value: err,
+            $type: type,
+            $stage: STAGE_ERROR
+          });
+        }
+      });
+      try {
+        this.$_eventQueue.next(event);
+      } catch (err) {
+        console.log('error on next', err);
       }
-      if (isArr(stage)) {
-        return stage.includes(phase.stage);
+      if (event.isStopped) {
+        break;
       }
-      else if (!(phase.stage === stage)) {
-        return false;
+      else {
+        value = event.value;
       }
-      if (isFn(test)) {
-        return test(phase.value, phase, subject);
+    }
+  }
+
+  $on($type, handler, $stage = STAGE_PERFORM, $test = ABSENT) {
+    const target = this;
+    if (!isFn(handler)) {
+      throw e('second argument of $on must be function', {
+        target: this,
+        type: $type,
+        handler
+      });
+    }
+
+    return this.$_eventQueue.subscribe({
+      error(err) {
+        console.log('$on error:', err);
+      },
+      next(phase) {
+        const {
+          $type: type,
+          $stage: stage,
+          value
+        } = phase;
+        if ($type && ($type !== '*') && ($type !== type)) {
+          return;
+        }
+        if ($stage !== stage) {
+          return;
+        }
+        if (isFn($test)) {
+          try {
+            if (!$test(value, phase)) {
+              return;
+            }
+          } catch (err) {
+            return;
+          }
+        }
+
+        try {
+          handler(value, phase);
+        } catch (err) {
+          if (!phase.isStopped) {
+            phase.complete();
+          }
+        }
       }
-      return true;
-    }));
+    });
   }
 
   $do(fn, ...args) {

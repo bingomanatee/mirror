@@ -47,7 +47,15 @@ export const isMap = (m) => m && (m instanceof Map);
 export const isFn = (f) => typeof f === 'function';
 
 export const e = (err, notes = {}) => {
-  if (typeof err === 'string') err = new Error(err);
+  if (typeof err === 'string') {
+    err = new Error(err);
+  }
+  if (!there(notes)) {
+    notes = {};
+  }
+  else if (!isObj(notes)) {
+    notes = { notes };
+  }
   return Object.assign(err, notes);
 };
 
@@ -74,8 +82,11 @@ export function toObj(m, force = false) {
   }
   let out = m;
   if (isObj(m)) {
-    if (force) out = { ...m };
-  } else if (isMap(m)) {
+    if (force) {
+      out = { ...m };
+    }
+  }
+  else if (isMap(m)) {
     out = {};
     m.forEach((val, key) => {
       if (!((typeof key === 'number') || (typeof key === 'string'))) {
@@ -93,7 +104,9 @@ export function toObj(m, force = false) {
 }
 
 export function asUserAction(str) {
-  if (typeof str !== 'string') throw new Error('bad user action');
+  if (typeof str !== 'string') {
+    throw new Error('bad user action');
+  }
 
   while (str.substr(0, 2) !== '$$') str = `$${str}`;
   return str;
@@ -102,7 +115,9 @@ export function asUserAction(str) {
 export const noop = (n) => n;
 
 export function maybeImmer(target) {
-  if (!isDraftable(target)) return target;
+  if (!isDraftable(target)) {
+    return target;
+  }
   return produce(target, noop);
 }
 

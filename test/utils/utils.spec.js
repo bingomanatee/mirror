@@ -41,6 +41,12 @@ tap.test(p.name, (suite) => {
       i.end();
     });
 
+    suiteTests.test('e', (et) => {
+      const e1 = Subject.e('alpha');
+      et.same(e1.message, 'alpha');
+      et.end();
+    });
+
     suiteTests.end();
   });
 

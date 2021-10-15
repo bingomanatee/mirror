@@ -1,60 +1,25 @@
-import { BehaviorSubject, combineLatest, of } from 'rxjs';
-import { distinctUntilKeyChanged, map } from 'rxjs/operators';
+import { BehaviorSubject } from 'rxjs';
+
 import {
-  ABSENT, STAGE_FINAL, STAGE_INIT, STAGE_PERFORM, STAGE_POST, STAGE_VALIDATE,
+  ABSENT, STAGE_ERROR, STAGE_FINAL, STAGE_INIT, STAGE_PERFORM, STAGE_POST, STAGE_VALIDATE,
 } from './constants';
-import { isFn } from './utils';
 
 class Event extends BehaviorSubject {
-  constructor(value, type, target, ...args) {
+  constructor(value, type, target = ABSENT, stage = STAGE_INIT, err = ABSENT) {
     super(value);
-    this.$type = type;
     this.$target = target;
-    this.$args = args;
+    this.$type = type;
     this.$_constructed = true;
+    this.$stage = stage;
+    this.$err = err;
   }
 
-  get $stageSubject() {
-    const self = this;
-    if (!this.$_stageSubject) {
-      this.$_stageSubject = of(STAGE_INIT, STAGE_VALIDATE, STAGE_PERFORM, STAGE_POST, STAGE_FINAL);
-      this.$_stageSubject.subscribe({
-        next(stage) {
-          self.$stage = stage;
-        },
-        error() {
-        },
-      });
+  error(err) {
+    if (!this.isStopped) {
+      this.complete();
+      this.$target.$_eventQueue.next(new Event(this.value, this.$type, this.$target, STAGE_ERROR, err));
     }
-    return this.$_stageSubject;
-  }
-
-  get $stage() {
-    return this.$_stage;
-  }
-
-  /**
-   * returns a serial Observable that has the value of event projected across all the stages.
-   * @returns {Observable<{stage: *, type: *, event: Event, value: *, target: *}>}
-   */
-  $perform() {
-    const event = this;
-    const stages = of(STAGE_INIT, STAGE_VALIDATE, STAGE_PERFORM, STAGE_POST, STAGE_FINAL);
-    const subject = combineLatest(this, stages)
-      .pipe(
-        map(([value, stage]) => ({
-          value,
-          type: event.$type,
-          target: event.$target,
-          stage,
-          event,
-        })),
-        distinctUntilKeyChanged('stage'),
-      );
-    return subject;
   }
 }
-
-Event.create = (...args) => new Event(...args).$perform;
 
 export default Event;
