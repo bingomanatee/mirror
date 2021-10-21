@@ -126,7 +126,6 @@ export default class Mirror extends BehaviorSubject {
     if (!isThere(value)) {
       value = value = isThere(this.$_trialValue) ? this.$_trialValue : super.getValue();
     }
-    ;
 
     const target = this;
     return produce(value, (draft) => {
@@ -176,7 +175,7 @@ export default class Mirror extends BehaviorSubject {
    * lastly, $flush() , like
    */
 
-  $_nextInit(value) {
+  $_try(value) {
     if (this.isStopped) {
       throw e('cannot try value on stopped Mirror', {
         value,
@@ -188,80 +187,14 @@ export default class Mirror extends BehaviorSubject {
     if (this.$isContainer) {
       this.$children.forEach((child, name) => {
         if (this.$valueHas(name, value)) {
-          child.$try(this.$valueGet(name, value));
+          child.$_try(this.$valueGet(name, value));
         }
       });
     }
   }
 
-  /**
-   * stages changes for latter commit.
-   *
-   *
-   * @param value
-   */
-  $try(value) {
-    this.$_tryEvent = new MirrorEvent(value, EVENT_TYPE_NEXT, this, STAGE_INIT);
-
-    this.$_eventQueue.next(this.$_tryEvent);
-    return this;
-  }
-
   get $isTrying() {
     return isThere(this.$_trialValue);
-  }
-
-  /**
-   * @returns {MirrorEvent};
-   */
-  get $_tryEvent() {
-    return this.$__tryEvent;
-  }
-
-  set $_tryEvent(e) {
-    if (this.$__tryEvent) {
-      if(!this.$__tryEvent.isStopped) {
-        this.$__tryEvent.complete();
-      }
-    }
-    this.$__tryEvent = e;
-  }
-
-  $_advanceTryEventTo(eventStatus) {
-    if (!this.$_tryEvent) {
-      return false;
-    }
-    let statusEvents = this.$_stagesFor(EVENT_TYPE_NEXT);
-    let current = statusEvents.indexOf(this.$_tryEvent.$stage);
-    const target = statusEvents.indexOf(eventStatus);
-    while((!this.$_tryEvent.isStopped) && (current < target)) {
-      current += 1;
-      this.$_tryEvent.$stage = statusEvents[current];
-      this.$_eventQueue.next(this.$_tryEvent);
-      if (this.$_tryEvent.isStopped) {
-        return false;
-      }
-    }
-    return true;
-  }
-  $then(fn) {
-    if (!this.$_advanceTryEventTo(STAGE_FINAL)) return this;
-    if (!this.$errors()) {
-      this.$commit(); // clears trial value
-    }
-    this.$_do(fn);
-    return this;
-  }
-
-  $catch(fn, noClear = false) {
-    const errs = this.$errors();
-    if (errs) {
-      fn(errs, this.value, this);
-      if (!noClear) {
-        this.$revert();
-      }
-    }
-    return this;
   }
 
   /**
@@ -300,15 +233,18 @@ export default class Mirror extends BehaviorSubject {
   $_listen() {
     this.$on(
       EVENT_TYPE_NEXT,
-      (value, p, t) => {t.$_nextInit(value)},
+      (value, p, t) => {t.$_try(value)},
       STAGE_INIT
     );
     this.$on(
       EVENT_TYPE_NEXT,
-      (value, p, t) => t.$catch((err) => {
-        t.$revert();
-        p.event.error(err);
-      }),
+      (value, p, t) => {
+        const errs = t.$errors();
+        if (errs) {
+          t.$revert();
+          p.error(errs);
+        }
+      },
       STAGE_VALIDATE
     ); // local validation
 
@@ -348,9 +284,6 @@ export default class Mirror extends BehaviorSubject {
    * @returns {(string)[]}
    */
   $_stagesFor(type, value) {
-    if (!this.$__stages) {
-      this.$__stages = new Map(defaultStageMap);
-    }
     if (this.$_stages.has(type)) {
       return this.$_stages.get(type);
     } else {
@@ -359,22 +292,37 @@ export default class Mirror extends BehaviorSubject {
   }
 
   $setStages(type, list) {
+    if (!this.$__stages) {
+      this.$__stages = new Map(defaultStageMap);
+    }
+
     if (!isArr(list)) throw e('bad input to $setStages', {type, list});
 
     this.$_stages.set(type, list);
   }
 
-  $event(type, value = ABSENT) {
+  $event(type, value = ABSENT, onSuccess, onFail, onComplete) {
     let stages = this.$_stagesFor(type, value);
     const target = this;
     const event = new MirrorEvent(value, type, this);
     event.subscribe({
+      complete() {
+        if (isFn(onComplete)) {
+          target.$_do(onComplete)
+        }
+      },
       error(err) {
         target.$_eventQueue.next({
           value: err,
           $type: type,
           $stage: STAGE_ERROR
         });
+        if (isFn(onFail)) {
+          target.$_do(onFail, err);
+        }
+        if (isFn(onComplete)) {
+          target.$_do(onComplete, err);
+        }
       }
     });
     for (let i = 0; i < stages.length; ++i) {
@@ -390,6 +338,9 @@ export default class Mirror extends BehaviorSubject {
       else {
         value = event.value;
       }
+    }
+    if (!event.isStopped) {
+      event.complete();
     }
   }
 
