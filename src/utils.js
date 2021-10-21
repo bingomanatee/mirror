@@ -50,7 +50,7 @@ export const e = (err, notes = {}) => {
   if (typeof err === 'string') {
     err = new Error(err);
   }
-  if (!there(notes)) {
+  if (!isThere(notes)) {
     notes = {};
   }
   else if (!isObj(notes)) {
@@ -129,6 +129,16 @@ export const isNumber = isNumberLodash;
  * @param item {any}
  * @returns {boolean}
  */
-export function there(item) {
+export function isThere(item) {
   return ![ABSENT, NAME_UNNAMED, undefined].includes(item);
+}
+
+export function unsub(sub) {
+  if (sub) {
+    try {
+      sub.unsubscribe();
+    } catch (err) {
+
+    }
+  }
 }

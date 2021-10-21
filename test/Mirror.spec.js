@@ -1,8 +1,7 @@
 import tap from 'tap';
 import _ from 'lodash';
+import { map } from 'rxjs/operators';
 import watch from '../watch';
-import { STAGE_PERFORM } from '../src/constants';
-
 const p = require('../package.json');
 
 const subjectName = 'Mirror';
@@ -10,8 +9,9 @@ const lib = require('../lib/index');
 
 const {
   TYPE_VALUE,
+  TYPE_OBJECT,
+  STAGE_INIT, STAGE_VALIDATE, STAGE_PERFORM, STAGE_POST, STAGE_FINAL,STAGE_ERROR,
   utils,
-  mirrorWatcher,
 } = lib;
 
 const NNV = 'non-numeric value';
@@ -134,7 +134,7 @@ tap.test(p.name, (suite) => {
 
       m.complete();
       tTest.end();
-    });
+    }, {skip: true});
 
     suiteTests.test('test ($try/$catch)', (tTest) => {
       const m = new Subject(1, {
@@ -207,7 +207,7 @@ tap.test(p.name, (suite) => {
 
       m.complete();
       tTest.end();
-    });
+    }, {skip: true});
 
     suiteTests.test('test ($try/$then/$catch)', (tTest) => {
       const m = new Subject(1, {
@@ -278,7 +278,7 @@ tap.test(p.name, (suite) => {
 
       m.complete();
       tTest.end();
-    });
+    }, {skip: true});
 
     suiteTests.test('events', (ev) => {
       ev.test('events - basic', (ee) => {
@@ -286,29 +286,29 @@ tap.test(p.name, (suite) => {
 
         const [{
           history,
-        }] = watch(m.$_eventQueue);
+        }] = watch(m.$_eventQueue.pipe(map((e) => ({ ...e, value: e.value }))));
         m.$event('send', 'event');
         ee.same(
           _.map(history, (item) => _.pick(item, ['value', '$stage'])),
           [
             {
-              $stage: 'init',
+              $stage: STAGE_INIT,
               value: 'event',
             },
             {
-              $stage: 'validate',
+              $stage: STAGE_VALIDATE,
               value: 'event',
             },
             {
-              $stage: 'perform',
+              $stage: STAGE_PERFORM,
               value: 'event',
             },
             {
-              $stage: 'post',
+              $stage: STAGE_POST,
               value: 'event',
             },
             {
-              $stage: 'final',
+              $stage: STAGE_FINAL,
               value: 'event',
             },
           ],
@@ -319,43 +319,43 @@ tap.test(p.name, (suite) => {
           _.map(history, (item) => _.pick(item, ['value', '$stage'])),
           [
             {
-              $stage: 'init',
+              $stage: STAGE_INIT,
               value: 'event',
             },
             {
-              $stage: 'validate',
+              $stage: STAGE_VALIDATE,
               value: 'event',
             },
             {
-              $stage: 'perform',
+              $stage: STAGE_PERFORM,
               value: 'event',
             },
             {
-              $stage: 'post',
+              $stage: STAGE_POST,
               value: 'event',
             },
             {
-              $stage: 'final',
+              $stage: STAGE_FINAL,
               value: 'event',
             },
             {
-              $stage: 'init',
+              $stage: STAGE_INIT,
               value: 'otherEvent',
             },
             {
-              $stage: 'validate',
+              $stage: STAGE_VALIDATE,
               value: 'otherEvent',
             },
             {
-              $stage: 'perform',
+              $stage: STAGE_PERFORM,
               value: 'otherEvent',
             },
             {
-              $stage: 'post',
+              $stage: STAGE_POST,
               value: 'otherEvent',
             },
             {
-              $stage: 'final',
+              $stage: STAGE_FINAL,
               value: 'otherEvent',
             },
           ],
@@ -377,7 +377,9 @@ tap.test(p.name, (suite) => {
 
         m.$_eventQueue.subscribe({
           next(phase) {
-            if (!phase.isStopped) pairs.push(`${phase.value}-${phase.$stage}`);
+            if (!phase.isStopped) {
+              pairs.push(`${phase.value}-${phase.$stage}`);
+            }
           },
           error(err) {
             console.log('caught error on eventQueue', err);
@@ -392,11 +394,11 @@ tap.test(p.name, (suite) => {
         eo.same(out, ['Bob']);
         eo.same(pairs,
           [
-            'Bob-init',
-            'Bob-validate',
-            'Bob-perform',
-            'Bob-post',
-            'Bob-final',
+            `Bob-${STAGE_INIT}`,
+            `Bob-${STAGE_VALIDATE}`,
+            `Bob-${STAGE_PERFORM}`,
+            `Bob-${STAGE_POST}`,
+            `Bob-${STAGE_FINAL}`,
           ]);
 
         m.$event('shoot', 'me');
@@ -404,32 +406,32 @@ tap.test(p.name, (suite) => {
         eo.same(out, ['Bob', 'me']);
         eo.same(pairs,
           [
-            'Bob-init',
-            'Bob-validate',
-            'Bob-perform',
-            'Bob-post',
-            'Bob-final',
-            'me-init',
-            'me-validate',
-            'me-error',
+            `Bob-${STAGE_INIT}`,
+            `Bob-${STAGE_VALIDATE}`,
+            `Bob-${STAGE_PERFORM}`,
+            `Bob-${STAGE_POST}`,
+            `Bob-${STAGE_FINAL}`,
+            `me-${STAGE_INIT}`,
+            `me-${STAGE_VALIDATE}`,
+            `me-${STAGE_ERROR}`,
           ]);
 
-        m.$event('shoot', 'you');
+        m.$event('shoot', 'You');
         eo.same(pairs,
           [
-            'Bob-init',
-            'Bob-validate',
-            'Bob-perform',
-            'Bob-post',
-            'Bob-final',
-            'me-init',
-            'me-validate',
-            'me-error',
-            'you-init',
-            'you-validate',
-            'you-perform',
-            'you-post',
-            'you-final',
+            `Bob-${STAGE_INIT}`,
+            `Bob-${STAGE_VALIDATE}`,
+            `Bob-${STAGE_PERFORM}`,
+            `Bob-${STAGE_POST}`,
+            `Bob-${STAGE_FINAL}`,
+            `me-${STAGE_INIT}`,
+            `me-${STAGE_VALIDATE}`,
+            `me-${STAGE_ERROR}`,
+            `You-${STAGE_INIT}`,
+            `You-${STAGE_VALIDATE}`,
+            `You-${STAGE_PERFORM}`,
+            `You-${STAGE_POST}`,
+            `You-${STAGE_FINAL}`,
           ], 'after you');
 
         eo.end();
@@ -437,6 +439,88 @@ tap.test(p.name, (suite) => {
       ev.end();
     });
 
+    suiteTests.test('children', (ch) => {
+      ch.test('basic ', (bas) => {
+        const m = new Subject({ x: 0, y: 0 }, {
+          children: { z: 0 },
+          name: 'xyz',
+        });
+
+        bas.same(m.$type, TYPE_OBJECT);
+
+        const [{ history }] = watch(m);
+
+        bas.same(history, [{ x: 0, y: 0, z: 0 }]);
+        bas.same(m.value, { x: 0, y: 0, z: 0 });
+        bas.same(m.$children.get('z').value, 0);
+
+        m.next({ x: 1, y: 1, z: 1 });
+        bas.same(m.value, { x: 1, y: 1, z: 1 });
+        bas.same(m.$children.get('z').value, 1);
+        bas.same(history, [{ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }]);
+
+        m.$children.get('z').next(2);
+
+        bas.same(m.value, { x: 1, y: 1, z: 2 });
+        bas.same(m.$children.get('z').value, 2);
+        bas.same(history, [{ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { x: 1, y: 1, z: 2 }]);
+
+        bas.end();
+      });
+
+      ch.end();
+    });
+
+    suiteTests.test('$delete', (del) => {
+      del.test('TYPE_VALUE', (dv) => {
+        dv.test('(scalar)', (sc) => {
+          const m = new Subject(1);
+          sc.same(m.value, 1);
+
+          m.$delete('foo');
+          sc.same(m.value, 1);
+
+          sc.end();
+        });
+        dv.test('(object)', (sc) => {
+          const m = new Subject({ foo: 1, bar: 2 }, { type: TYPE_VALUE });
+          sc.same(m.value, { foo: 1, bar: 2 });
+
+          m.$delete('foo');
+          sc.same(m.value, { bar: 2 });
+
+          sc.end();
+        });
+        dv.test('(map)', (sc) => {
+          const m = new Subject(new Map([['foo', 1], ['bar', 2]]), { type: TYPE_VALUE });
+
+          m.$delete('foo');
+          sc.same(m.value, new Map([['bar', 2]]));
+
+          sc.end();
+        });
+
+        dv.end();
+      });
+      del.test('TYPE_OBJECT', (sc) => {
+        const m = new Subject({ foo: 1, bar: 2 });
+        sc.same(m.value, { foo: 1, bar: 2 });
+
+        m.$delete('foo');
+        sc.same(m.value, { bar: 2 });
+
+        sc.end();
+      });
+      del.test('TYPE_MAP', (sc) => {
+        const m = new Subject(new Map([['foo', 1], ['bar', 2]]));
+
+        m.$delete('foo');
+        sc.same(m.value, new Map([['bar', 2]]));
+
+        sc.end();
+      });
+      del.end();
+    });
     suiteTests.end();
   });
 

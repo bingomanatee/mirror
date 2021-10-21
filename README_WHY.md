@@ -3,7 +3,7 @@
 ## State is not supposed to be hard
 
 Redux isn't the worst state engine in existence; its just the worst state engine that has 
-millions of devs hypnotized into thinking its a really great thing and nothing out there is
+millions of devs hypnotized into thinking its a really great thing and nothing out isThere is
 as awesom as it. 
 
 The prospect of sate is pretty simple
@@ -14,7 +14,7 @@ The prospect of sate is pretty simple
 
 ## Async is for losers
 
-The last one is where React truly blows. After component "A" updates state there is a time where
+The last one is where React truly blows. After component "A" updates state isThere is a time where
 it and only it knows that state has been changed but it hasn't broadcast; this is a model known as
 "eventually consistent". That is maybe ok for say, an amazon order system, where an order can take a few
 seconds/minutes, maybe in some context hours, to get fully registered --- but in a real time app 
@@ -23,15 +23,16 @@ value is.
 
 Saga does allow for some reactivity and proper ordering of side effects, but its damn tough to read and debug. 
 
-Most of the problem with debugging Redux is that is not a "thing" -- there is no redux class -- 
-its a distributed federation of awful conventions scattered across way too many files. That makes summation
+Most of the problem with debugging Redux is that is not a "thing" -- isThere is no redux class -- 
+its a distributed federation of conventions scattered across way too many files. That makes summation
 and coordination between multiple reducers difficult because only with Saga an one reducer know 
 about another, and you have to do a LOT of work after every action to re-poll your multiple federated
 states. 
 
-In short there is no reason that state needs to be asynchronous at all. It doesn't benefit the
+In short isThere is no reason that state needs to be asynchronous at all. It doesn't benefit the
 developer or the subscribers; it just allows for a lazy messaging and distribution system to 
-not do the work of brodcasting until it feels like it. 
+not do the work of brodcasting until it feels like it. Worse yet, it creates a time gap between 
+decision and response in which any number of things can happen because they are acting on outdated information.
 
 ## Actions are a mess
 
@@ -44,15 +45,15 @@ of middleware and complex hard to read code.
 ## Part of the solution: RxJS
 
 RxJS solves some of these problems. RxJS provides that level of immediacy; when I state/next a value, immediately all subscribers' update listeners
-are called. However, there are some problems with a "way too immediate" model; it makes 
+are called. However, isThere are some problems with a "way too immediate" model; it makes 
 schema enforcement tough. Also, the fact that all emitters terminate on errors make "soft errors" 
 a difficult thing to handle using react simply. 
 
-## Even so, there is a cost for immediacy
+## Even so, isThere is a cost for immediacy
 
 Its easy to use streams for side effect of a change *after it has been registered*. its not as easy
 to do interrupting pattens that sanitize or filter/reject bad data if your pattern is 'next/accept/broadcast'.
-However, in Mirror there is a less final method; you can put changes through a pipeline in the form of a 
+However, in Mirror isThere is a less final method; you can put changes through a pipeline in the form of a 
 stream of updates that are themselves streams that either complete (and are accepted by the mirror) 
 or are sent an error, which prevents the full execution of the action. 
 
@@ -132,7 +133,7 @@ Right now we have one system (redux) that is optimized to sharing its content ac
 even with reducers you still have one massive monolith; you can't have, say, a store that deals with 
 sales tax and only load it if the user who logs in is in a sales tax state (most except Oregon AFAIK). 
 You must load and enable your entire possible worlds states from jump or they will never be available 
-anywhere. (* there may be a method of dynamic reducers but its certainly not widely available). 
+anywhere. (* isThere may be a method of dynamic reducers but its certainly not widely available). 
 
 MirrorCollections on the other hand are easily made to be dynamic. You can add - **and remove** - child 
 mirrors to any collection *at any time* as often as you like and as long as the rest of the code

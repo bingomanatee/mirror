@@ -12,7 +12,7 @@ import {
   animationFrameScheduler,
   from,
   throwError, combineLatest, BehaviorSubject,
-  } from 'rxjs';
+} from 'rxjs';
 import _ from 'lodash';
 import watch from '../watch';
 
@@ -156,7 +156,10 @@ tapTest.test('expeiments', (i) => {
     const bs = new BehaviorSubject('value');
     const emitter = combineLatest(bs, from([1, 2, 3]));
 
-    const [{ history, errors }, sub] = watch(emitter);
+    const [{
+      history,
+      errors,
+    }, sub] = watch(emitter);
 
     cl.same(history, [['value', 1], ['value', 2], ['value', 3]]);
     cl.end();
@@ -171,7 +174,10 @@ tapTest.test('expeiments', (i) => {
         }),
       );
 
-    const [{ history, errors }, sub] = watch(emitter);
+    const [{
+      history,
+      errors,
+    }, sub] = watch(emitter);
     emitter.next('value');
 
     scl.same(history, [['value', 1], ['value', 2], ['value', 3]]);

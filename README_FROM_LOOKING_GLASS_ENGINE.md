@@ -16,7 +16,7 @@ you can use any un-dollar-signed property as a getter/setter and not worry about
 ## One Map, One Way
 
 There is only one class for "dictionary" type streams; where LGE had ValueMapStream and ValueObjectStream,
-there is only MirrorCollection; you can seed it with an object OR a Map and it will produce the same sort 
+isThere is only MirrorCollection; you can seed it with an object OR a Map and it will produce the same sort 
 of value. Note, internally, it uses a map as a store for efficiency but it reflects same form of data yuo 
 pass in to its constructor. 
 
@@ -27,7 +27,7 @@ other $send-based operations they will throw if the event errors out.
 
 ## Simpler event phasing
 
-Event phases are numeric - currently, PHASE_PRE(-1), PHASE_ON(0) and PHASE_POST. 
+MirrorEvent phases are numeric - currently, PHASE_PRE(-1), PHASE_ON(0) and PHASE_POST. 
 
 ## re-branding "field subjects" as "children"
 
