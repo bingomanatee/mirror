@@ -3,7 +3,7 @@ import { lazy } from './mirrorMisc';
 import {
   ABSENT, EVENT_TYPE_CHILD_ADDED, TYPE_MAP, TYPE_OBJECT, TYPE_VALUE,
 } from './constants';
-import { e, isThere } from './utils';
+import { e, isThere, toMap } from './utils';
 import newMirror from './newMirror';
 
 export default (BaseClass) => class WithChildren extends BaseClass {
@@ -67,6 +67,21 @@ export default (BaseClass) => class WithChildren extends BaseClass {
     return false;
   }
 
+  $_sendToChildren(value = ABSENT) {
+    if (!isThere(value)) {
+      value = this.$currentValue;
+    }
+
+    if (this.$isContainer) {
+      const valueMap = toMap(value);
+      valueMap.forEach((childValue, key) => {
+        if (this.$children.has(key)) {
+          this.$children.get(key).$_try(childValue);
+        }
+      })
+    }
+  }
+
   /**
    * override/assert child values over the current value.
    * @param value
@@ -74,7 +89,7 @@ export default (BaseClass) => class WithChildren extends BaseClass {
    */
   $_valueWithChildren(value = ABSENT) {
     if (!isThere(value)) {
-      value = this.$_pendingValue;
+      value = this.$current;
     }
 
     const target = this;

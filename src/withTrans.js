@@ -2,13 +2,25 @@
 import produce from 'immer';
 import { BehaviorSubject } from 'rxjs';
 import {
-  ABSENT, TRANS_STATE_COMPLETE, TRANS_TYPE_ACTION, TRANS_TYPE_CHANGE,
+  ABSENT, EVENT_TYPE_ACTION, STAGE_INIT, STAGE_PERFORM, TRANS_STATE_COMPLETE, TRANS_TYPE_ACTION, TRANS_TYPE_CHANGE,
 } from './constants';
 import { e, isThere } from './utils';
 import { lazy } from './mirrorMisc';
 import MirrorTrans from './MirrorTrans';
 
 export default (BaseClass) => (class WithTrans extends BaseClass {
+  constructor(...init) {
+    super(...init);
+
+    this.$on(STAGE_INIT, ({
+      name,
+      args,
+    }, p, t) => {
+      const trans = t.$_addTrans({})
+    },
+    STAGE_PERFORM);
+  }
+
   get $_pending() {
     return lazy(this, '$__pending', (target) => {
       const pending = new BehaviorSubject([]);
@@ -40,7 +52,7 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
   $_flushPendingIfDone(list) {
     if (!isThere(list)) return this.$_flushPendingIfDone(this.$_pending.value);
     if (list.length) {
-      if (list.all((transaction) => transaction.state === TRANS_STATE_COMPLETE)) {
+      if (list.every((transaction) => transaction.state === TRANS_STATE_COMPLETE)) {
         if (this.$isContainer) {
           this.$children.forEach((child) => child.$_flushPendingIfDone());
         }
@@ -84,7 +96,7 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
         target: this,
       });
     }
-
+    this.$_trialValue = value;
     this.$_addTrans({
       value,
       type: TRANS_TYPE_CHANGE,
@@ -100,14 +112,7 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
     const trans = produce(def, (draft) => new MirrorTrans(draft));
     this.$_upsertTrans(produce(def, (draft) => new MirrorTrans(draft)));
     if (trans.type === TRANS_TYPE_CHANGE) {
-      // @TODO: shard
-      if (!this.$isValid()) {
-        const value = this.getValue();
-        if (!this.$_pending.value.some((trans) => trans.type === TRANS_TYPE_ACTION)) {
-          this.$_pending.next([]);
-        } // else let  action closure clear pending and rethrow to allow parent actions to catch.
-        throw e('invalid value', { value, target: this });
-      }
+      this.$_sendToChildren(trans.value);
     }
     return trans;
   }

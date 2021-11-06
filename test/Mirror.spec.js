@@ -379,7 +379,7 @@ tap.test(p.name, (suite) => {
       });
 
       ch.end();
-    }, { skip: true });
+    });
 
     suiteTests.test('$delete', (del) => {
       del.test('TYPE_VALUE', (dv) => {
@@ -442,7 +442,7 @@ tap.test(p.name, (suite) => {
         sc.end();
       });
       del.end();
-    }, { skip: true });
+    });
 
     suiteTests.test('$mutate', (mut) => {
       mut.test('object', (mutObj) => {
@@ -475,7 +475,7 @@ tap.test(p.name, (suite) => {
       });
 
       mut.end();
-    }, { skip: true });
+    });
 
     suiteTests.test('actions', (act) => {
       const m = new Subject({
@@ -513,12 +513,11 @@ tap.test(p.name, (suite) => {
 
       m.$do.scale(0.5);
 
-      console.log('--- history:', history);
       const FIFTH = { a: 4, b: 4 };
       act.same(history, [FIRST, SECOND, THIRD, FOURTH, FIFTH, SECOND]);
 
       act.end();
-    }, { skip: true });
+    });
 
     suiteTests.end();
   });
