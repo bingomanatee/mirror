@@ -31,13 +31,16 @@ import { mirrorType, initQueue, makeDoProxy, makeDoObj, lazy } from './mirrorMis
 import { catchError, distinctUntilKeyChanged, filter, map, switchMap, finalize, tap } from 'rxjs/operators';
 import MirrorEvent from './MirrorEvent';
 import MirrorTrans from './MirrorTrans';
+import withTrans from './withTrans';
+import withAction from './withAction';
+import withChildren from './withChildren';
 
 /**
  * Mirror is a special extension of BehaviorSubject; it shards its sub-properties into children
  * which, when updated, update the parent.
  * This allows for field level validation, transactional updates and all sorts of other goodies.
  */
-export default class Mirror extends BehaviorSubject {
+export default class Mirror extends withAction(withChildren((withTrans(BehaviorSubject)))) {
   constructor(value, config = ABSENT) {
     super(value);
     this.$configure(config);
@@ -131,24 +134,9 @@ export default class Mirror extends BehaviorSubject {
     if (!this.$_constructed) {
       // do not validate first value; accept it no matter what
       super.next(nextValue);
-    }
-    else {
+    } else {
       return this.$event(EVENT_TYPE_NEXT, nextValue);
     }
-  }
-
-  get $_lastQueuedValue() {
-    if (!this._changeQueue.isStopped) {
-      let index = this._changeQueue.value.length - 1;
-      while (index >= 0) {
-        const queueSub = this._changeQueue.value[index];
-        if (queueSub && (!queueSub.isStopped)) {
-          return queueSub.value;
-        }
-        index -= 1;
-      }
-    }
-    return ABSENT;
   }
 
   /**
@@ -157,10 +145,10 @@ export default class Mirror extends BehaviorSubject {
    * @returns {*}
    */
   get $_pendingValue() {
-    let queuedValue = this.$_lastQueuedValue;
-    if (queuedValue !== ABSENT) {
-      return queuedValue;
-    }
+    // let queuedValue = this.$_lastQueuedValue;
+    // if (queuedValue !== ABSENT) {
+    //   return queuedValue;
+    // }
     return isThere(this.$_trialValue) ? this.$_trialValue : super.getValue(); // $_trialValue is being deprecated
   }
 
@@ -172,53 +160,7 @@ export default class Mirror extends BehaviorSubject {
     return this.$_valueWithChildren(value);
   }
 
-  /**
-   * override/assert child values over the current value.
-   * @param value
-   * @returns {symbol}
-   */
-  $_valueWithChildren(value = ABSENT) {
-    if (!isThere(value)) {
-      value = value = this.$_pendingValue;
-    }
-
-    const target = this;
-    return produce(value, (draft) => {
-      target.$children.forEach((childMirror, name) => {
-        switch (target.$type) {
-          case TYPE_MAP:
-            draft.set(name, childMirror.value);
-            break;
-
-          case TYPE_OBJECT:
-            draft[name] = childMirror.value;
-            break;
-        }
-      });
-    });
-  }
-
   /** *************** try/catch, validation ****************** */
-
-  /**
-   * $_try needs to be updated -- its not really where it should be
-   * @param value
-   */
-  $_try(value, parent = ABSENT) {
-    if (this.isStopped) {
-      throw e('cannot try value on stopped Mirror', {
-        value,
-        target: this
-      });
-    }
-
-    this.$_addToQueue({
-      value,
-      type: TRANS_TYPE_CHANGE,
-      parent,
-      sharded: !this.$isContainer
-    });
-  }
 
   get $isTrying() {
     return isThere(this.$_trialValue);
@@ -261,7 +203,7 @@ export default class Mirror extends BehaviorSubject {
     this.$on(
       EVENT_TYPE_NEXT,
       (value, p, t) => {
-        t.$_try(value);
+        t.$_trialValue = value;
       },
       STAGE_INIT
     );
@@ -315,8 +257,7 @@ export default class Mirror extends BehaviorSubject {
         const nextEvent = t.next(nextValue);
         if (nextEvent && nextEvent.thrownError) {
           p.error(nextEvent.thrownError);
-        }
-        else {
+        } else {
           p.next({
             fn,
             args,
@@ -334,8 +275,7 @@ export default class Mirror extends BehaviorSubject {
     }, p, t) => {
       if (!t.$_actions.has(name)) {
         p.error(e('no action named ' + name));
-      }
-      else {
+      } else {
         try {
           t.$_actions.get(name)(t, ...args);
         } catch (err) {
@@ -356,69 +296,6 @@ export default class Mirror extends BehaviorSubject {
 
   /**
    *
-   * This holds a list of Subjects whose values are candidates under inspection for replacement
-   * for the mirrors' current value.
-   *
-   * When a candidate is rejected, it _and all subsequent values_ are flushed from the list.
-   * When a candidate is accepted, it replaces the core BehaviorSubjects' value.
-   * This queue is observed and its values are sharded up the tree to any children.
-   *
-   * @returns {BehaviorSubject}
-   */
-  get $_changeQueue() {
-    return lazy(this, '$_changeQueue', (target) => {
-      const queue = new Subject();
-      queue.subscribe({
-        next(queue) {
-          target.$_upsertToProcessQueue(queue);
-        },
-        error(err) {
-          console.log('error  in changeQueue', err);
-        }
-      });
-      return queue;
-    });
-  }
-
-  $_upsertToProcessQueue(item) {
-    if (this.$_pending.some((candidate) => candidate.id === item.id)) {
-      let list = this.$_pending.map((candidate) => {
-        return candidate.id === item.id ? item : candidate;
-      });
-
-      this.$_pending.next(produce(list, (draft) => draft));
-    }
-    else {
-      this.$_pending.next(produce([...this.$_pending.value, item], (draft) => draft));
-    }
-  }
-
-  get $_pending() {
-    return lazy(this, '$__pending', () => {
-      const pending = new BehaviorSubject([]);
-      pending.subscribe({
-        next(list) {
-
-        }
-      })
-      return pending;
-    });
-  }
-
-  set $_pending(list) {
-    this.$__pending = produce(list, (l) => l);
-  }
-
-  $_addToQueue(def) {
-    if (this.isStopped) {
-      throw e('cannot transact on stopped mirror', { trans: def });
-    }
-    const trans = produce(def, (draft) => new MirrorTrans(draft));
-    this.$_changeQueue.next(trans);
-  }
-
-  /**
-   *
    * @returns {Map}
    */
   get $_stages() {
@@ -434,8 +311,7 @@ export default class Mirror extends BehaviorSubject {
   $_stagesFor(type, value) {
     if (this.$_stages.has(type)) {
       return this.$_stages.get(type);
-    }
-    else {
+    } else {
       return defaultNextStages;
     }
   }
@@ -484,8 +360,7 @@ export default class Mirror extends BehaviorSubject {
       }
       if (event.isStopped) {
         break;
-      }
-      else {
+      } else {
         value = event.value;
       }
     }
@@ -572,12 +447,6 @@ export default class Mirror extends BehaviorSubject {
     return error ? error : result;
   }
 
-  $finally(fn) {
-    this.$flush();
-    this.$_do(fn);
-    return this;
-  }
-
   /**
    * either finalized a new next value, or locks in the trial value.
    * Updates the parent._next value;
@@ -594,8 +463,7 @@ export default class Mirror extends BehaviorSubject {
     if (isThere(value)) {
       super.next(value);
       this.$event(EVENT_TYPE_COMMIT, value);
-    }
-    else {
+    } else {
       if (this.$isContainer) {
         this.$children.forEach((child) => child.$flush());
       }
@@ -620,8 +488,7 @@ export default class Mirror extends BehaviorSubject {
     if (this.$isTrying) {
       if (!this.$errors()) {
         this.$commit();
-      }
-      else {
+      } else {
         this.$revert();
       }
     }
@@ -666,73 +533,6 @@ export default class Mirror extends BehaviorSubject {
       return value.get(key);
     }
     return value[key];
-  }
-
-  /**
-   * returns false if any children are invalid.
-   * @returns {boolean}
-   */
-  get $childErrors() {
-    if (!this.$isContainer) {
-      return false;
-    }
-    if (this.$parent) {
-      return this.$parent.$errors;
-    }
-    return false;
-  }
-
-  get $children() {
-    return lazy(this, '$_children', () => new Map());
-  }
-
-  get $_childSubs() {
-    return lazy(this, '$__childSubs', () => new Map());
-  }
-
-  $addChild(name, value, type = TYPE_VALUE) {
-    if (this.isStopped) {
-      throw e('attempt to redefine stopped mirror', {
-        target: this,
-        name,
-        value
-      });
-    }
-    let childMirror;
-    if (value instanceof Mirror) {
-      value.$configure({
-        name,
-        parent: this
-      });
-      childMirror = value;
-    }
-    else {
-      childMirror = new Mirror(value, {
-        name,
-        type,
-        parent: this
-      });
-    }
-    this.$children.set(name, childMirror);
-    const target = this;
-    this.$_childSubs.set(name, childMirror.subscribe({
-      next(value) {
-        if (!target.$isTrying) {
-          target.next(target.getValue());
-        }
-      },
-      error(err) {
-        console.log('--- child error thrown', err,
-          'for child', name, 'of', target);
-      }
-    }));
-    if (this.$_constructed) {
-      this.$event(EVENT_TYPE_CHILD_ADDED, {
-        name,
-        childMirror
-      });
-    }
-    this.next(this.getValue());
   }
 
   $has(key) {
@@ -790,8 +590,7 @@ export default class Mirror extends BehaviorSubject {
           target.$removeChild(name);
         }
       });
-    }
-    else {
+    } else {
       this.$removeChild(name);
     }
   }
@@ -836,54 +635,5 @@ export default class Mirror extends BehaviorSubject {
 
   get $_actions() {
     return lazy(this, '$__actions', () => new Map());
-  }
-
-  $keyFor(fieldName) {
-    if (!this.$isContainer) {
-      return null;
-    }
-    if (!isStr(fieldName)) {
-      return null;
-    }
-    if (this.$has(fieldName)) {
-      return fieldName;
-    }
-    const lowerCaseFieldName = fieldName.toLowerCase();
-    let match = null;
-    const test = key => {
-      if (isStr(key) && key.toLowerCase() === lowerCaseFieldName) {
-        match = key;
-      }
-    };
-    if (this.$type === TYPE_MAP) {
-      this.value.forEach(test);
-    }
-    if (this.$type === TYPE_OBJECT) {
-      Object.keys(this.value)
-        .forEach(test);
-    }
-    return match;
-  }
-
-  get $_doObj() {
-    return lazy(this, '$__doObj', makeDoObj);
-  }
-
-  get $_doProxy() {
-    return lazy(this, '$__doProxy', makeDoProxy);
-  }
-
-  get $do() {
-    if (typeof Proxy === undefined) {
-      return this.$_doObj;
-    }
-    return this.$_doProxy;
-  }
-
-  $addAction(name, fn) {
-    if (this.$_actions.has(name)) {
-      console.warn('overwriting existing action in mirror', this);
-    }
-    this.$_actions.set(name, fn);
   }
 }

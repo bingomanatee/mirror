@@ -143,150 +143,6 @@ tap.test(p.name, (suite) => {
       tTest.end();
     }, { skip: true });
 
-    suiteTests.test('test ($try/$catch)', (tTest) => {
-      const m = new Subject(1, {
-        name: 'Testy$try$catch',
-        test: (v) => {
-          if (!utils.isNumber(v)) {
-            throw new Error(NNV);
-          }
-        },
-      });
-
-      const [{
-        history,
-        errors,
-      }] = watch(m);
-      let caughtError = '';
-
-      function doCatch(err) {
-        caughtError = err;
-      }
-
-      tTest.same(errors.length, 0);
-      tTest.same(history, [1]);
-      tTest.same(m.value, 1);
-      tTest.notOk(m.$isTrying);
-
-      m.$try(2)
-        .$catch(doCatch);
-      tTest.same(m.getValue(), 2);
-      tTest.same(errors.length, 0);
-      tTest.same(history, [1]);
-      tTest.ok(m.$isTrying);
-      tTest.same(caughtError, '');
-
-      m.$flush();
-      tTest.same(m.getValue(), 2);
-      tTest.same(errors.length, 0);
-      tTest.same(history, [1, 2]);
-      tTest.notOk(m.$isTrying);
-      tTest.same(caughtError, '');
-
-      m.$try('three')
-        .$catch(doCatch);
-      tTest.same(m.value, 2);
-      tTest.same(errors.length, 0);
-      tTest.same(caughtError, new Error(NNV));
-      tTest.same(history, [1, 2]);
-      tTest.notOk(m.$isTrying);
-
-      caughtError = '';
-      m.$flush();
-      tTest.same(m.value, 2);
-      tTest.same(errors.length, 0);
-      tTest.same(history, [1, 2]);
-      tTest.notOk(m.$isTrying);
-
-      m.$try(4)
-        .$catch(doCatch);
-      tTest.same(m.value, 4);
-      tTest.same(errors.length, 0);
-      tTest.same(history, [1, 2]);
-      tTest.same(caughtError, '');
-      tTest.ok(m.$isTrying);
-
-      m.$flush();
-      tTest.same(m.value, 4);
-      tTest.same(errors.length, 0);
-      tTest.same(history, [1, 2, 4]);
-      tTest.notOk(m.$isTrying);
-
-      m.complete();
-      tTest.end();
-    }, { skip: true });
-
-    suiteTests.test('test ($try/$then/$catch)', (tTest) => {
-      const m = new Subject(1, {
-        name: 'ttc',
-        test: (v) => {
-          if (!utils.isNumber(v)) {
-            throw new Error(NNV);
-          }
-        },
-      });
-
-      const [{
-        history,
-        errors,
-      }] = watch(m);
-      let caughtError = '';
-      let thenHappened = false;
-
-      function doThen() {
-        thenHappened = true;
-      }
-
-      function saveError(err) {
-        caughtError = err;
-      }
-
-      tTest.same(errors.length, 0);
-      tTest.same(history, [1]);
-      tTest.same(m.value, 1);
-      tTest.notOk(m.$isTrying);
-
-      m.$try(2)
-        .$then(doThen)
-        .$catch(saveError);
-      tTest.same(m.getValue(), 2);
-      tTest.same(errors.length, 0);
-      tTest.same(history, [1, 2]);
-
-      tTest.notOk(m.$isTrying);
-      tTest.notOk(caughtError);
-      tTest.ok(thenHappened);
-
-      thenHappened = false;
-      m.$try('three')
-        .$then(doThen)
-        .$catch(saveError);
-      tTest.same(m.value, 2);
-      tTest.same(errors.length, 0);
-
-      tTest.same(caughtError, new Error(NNV));
-      tTest.notOk(m.$isTrying);
-      tTest.notOk(thenHappened);
-
-      tTest.same(history, [1, 2]);
-      tTest.notOk(m.$isTrying);
-
-      caughtError = '';
-      m.$try(4)
-        .$then(doThen)
-        .$catch(saveError);
-      tTest.same(m.value, 4);
-      tTest.same(errors.length, 0);
-      tTest.same(history, [1, 2, 4]);
-
-      tTest.notOk(m.$isTrying);
-      tTest.notOk(caughtError);
-      tTest.ok(thenHappened);
-
-      m.complete();
-      tTest.end();
-    }, { skip: true });
-
     suiteTests.test('events', (ev) => {
       ev.test('events - basic', (ee) => {
         const m = new Subject('value');
@@ -447,7 +303,7 @@ tap.test(p.name, (suite) => {
         eo.end();
       });
       ev.end();
-    });
+    }, { skip: true });
 
     suiteTests.test('children', (ch) => {
       ch.test('basic ', (bas) => {
@@ -523,7 +379,7 @@ tap.test(p.name, (suite) => {
       });
 
       ch.end();
-    });
+    }, { skip: true });
 
     suiteTests.test('$delete', (del) => {
       del.test('TYPE_VALUE', (dv) => {
@@ -586,7 +442,7 @@ tap.test(p.name, (suite) => {
         sc.end();
       });
       del.end();
-    });
+    }, { skip: true });
 
     suiteTests.test('$mutate', (mut) => {
       mut.test('object', (mutObj) => {
@@ -619,7 +475,7 @@ tap.test(p.name, (suite) => {
       });
 
       mut.end();
-    });
+    }, { skip: true });
 
     suiteTests.test('actions', (act) => {
       const m = new Subject({
@@ -662,7 +518,7 @@ tap.test(p.name, (suite) => {
       act.same(history, [FIRST, SECOND, THIRD, FOURTH, FIFTH, SECOND]);
 
       act.end();
-    });
+    }, { skip: true });
 
     suiteTests.end();
   });

@@ -1,13 +1,12 @@
 import hyperid from 'hyperid';
 import { immerable } from 'immer';
+import lGet from 'lodash/get';
 
 import { ABSENT, TRANS_STATE_NEW, TRANS_TYPE_CHANGE } from './constants';
 
 const hyper = hyperid();
 
 export default class MirrorTrans {
-  [immerable] = true;
-
   constructor({
     name = ABSENT,
     creator = ABSENT,
@@ -25,4 +24,10 @@ export default class MirrorTrans {
     this.value = value;
     this.state = TRANS_STATE_NEW;
   }
+
+  matches(compareTo) {
+    return (lGet(compareTo, 'id', compareTo) === this.id);
+  }
 }
+
+MirrorTrans[immerable] = true;
