@@ -20,12 +20,23 @@ export const EVENT_TYPE_CHILD_ADDED = 'childAdded';
 export const EVENT_TYPE_REVERT = 'event:revert';
 export const EVENT_TYPE_COMMIT = 'event:commit';
 export const EVENT_TYPE_ACTION = 'event:action';
+export const EVENT_TYPE_MUTATE = 'event:mutate';
 
 export const defaultNextStages = Object.freeze([STAGE_INIT, STAGE_VALIDATE, STAGE_PERFORM, STAGE_POST, STAGE_FINAL]);
 export const defaultActionStages = Object.freeze([STAGE_INIT, STAGE_PERFORM, STAGE_FINAL]);
+export const defaultMutateStages = Object.freeze([STAGE_INIT, STAGE_VALIDATE, STAGE_PERFORM, STAGE_POST, STAGE_FINAL]);
 export const defaultStageMap = Object.freeze(new Map(
   [
     [EVENT_TYPE_NEXT, defaultNextStages],
     [EVENT_TYPE_ACTION, defaultActionStages],
+    [EVENT_TYPE_MUTATE, defaultMutateStages],
   ],
 ));
+export const SET_RE = /^set(.+)$/i;
+
+export const TRANS_TYPE_CHANGE = 'trans:change';
+export const TRANS_TYPE_ACTION = 'trans:action';
+
+export const TRANS_STATE_NEW = 'trans:state:new';
+export const TRANS_STATE_ERROR = 'trans:state:error';
+export const TRANS_STATE_COMPLETE = 'trans:state:complete';

@@ -15,6 +15,7 @@
     "build": "node_modules/rollup/dist/bin/rollup -c='rollup.config.js'"
   },
   "dependencies": {
+    "hyperid": "^2.3.1",
     "immer": "^9.0.6",
     "lodash": "^4.17.19",
     "rxjs": "^7.4"

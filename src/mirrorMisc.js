@@ -1,9 +1,11 @@
 /* eslint-disable no-param-reassign */
 import { BehaviorSubject, of, Subject } from 'rxjs';
 import { catchError, filter, switchMap } from 'rxjs/operators';
-import { isFn, isMap, isObj } from './utils';
 import {
-  ABSENT, NAME_UNNAMED, TYPE_MAP, TYPE_OBJECT, TYPE_VALUE,
+  isFn, isMap, isObj, isStr, noop, ucFirst,
+} from './utils';
+import {
+  ABSENT, EVENT_TYPE_ACTION, NAME_UNNAMED, SET_RE, TYPE_MAP, TYPE_OBJECT, TYPE_VALUE,
 } from './constants';
 
 export function mirrorType(target, value = ABSENT) {
@@ -103,7 +105,6 @@ export function testProjector(target) {
     );
 }
 
-
 export function initQueue(target) {
   target.$__queue = new Subject()
     .pipe(
@@ -120,4 +121,56 @@ export function initQueue(target) {
       target.$__queue = null;
     },
   });
+}
+
+export function makeDoProxy(mirror) {
+  return new Proxy(mirror, {
+    get(target, prop) {
+      if (target.$__actions && target.$_actions.has(prop)) {
+        return (...args) => target.$event(EVENT_TYPE_ACTION, {
+          name: prop,
+          args,
+        });
+      }
+      if (target.$isContainer) {
+        if (isStr(prop)) {
+          if (SET_RE.test(prop)) {
+            const setName = SET_RE.exec(prop)[1];
+            const keyFor = target.$keyFor(setName);
+            if (keyFor) {
+              return (value) => target.$set(keyFor, value);
+            }
+          }
+        }
+      }
+      console.warn('cannot find action ', prop, 'in', target);
+      return noop;
+    },
+  });
+}
+
+export function makeDoObj(target) {
+  const doObj = {};
+  this.$_actions.forEach((fn, name) => {
+    doObj[name] = (...args) => target.$event(EVENT_TYPE_ACTION, { name, args });
+  });
+  if (this.$isContainer) {
+    this.$keys.forEach((name) => {
+      doObj[`set${ucFirst(name)}`] = (...args) => target.$event(EVENT_TYPE_ACTION, { name, args });
+    });
+  }
+  return doObj;
+}
+
+/**
+ *
+ * @param target {object}
+ * @param name {string}
+ * @param creator {function}
+ */
+export function lazy(target, name, creator) {
+  if (!(name in target)) {
+    target[name] = creator(target, name);
+  }
+  return target[name];
 }

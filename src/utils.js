@@ -52,8 +52,7 @@ export const e = (err, notes = {}) => {
   }
   if (!isThere(notes)) {
     notes = {};
-  }
-  else if (!isObj(notes)) {
+  } else if (!isObj(notes)) {
     notes = { notes };
   }
   return Object.assign(err, notes);
@@ -85,8 +84,7 @@ export function toObj(m, force = false) {
     if (force) {
       out = { ...m };
     }
-  }
-  else if (isMap(m)) {
+  } else if (isMap(m)) {
     out = {};
     m.forEach((val, key) => {
       if (!((typeof key === 'number') || (typeof key === 'string'))) {
@@ -141,4 +139,36 @@ export function unsub(sub) {
 
     }
   }
+}
+
+export function ucFirst(str) {
+  if (!isStr(str, true)) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+export function strip(name, target) {
+  if (isMap(target)) {
+    const newMap = new Map(target);
+    newMap.delete(name);
+    return newMap;
+  }
+  if (isObj(target)) {
+    const out = { ...target };
+    delete out[name];
+    return out;
+  }
+  console.warn('cannot strip', target);
+  return target;
+}
+
+export function mapFromKeys(target, keyMap) {
+  if (!(isMap(target) && isMap(keyMap))) throw e('mapFromKeys - bad values:', { target, keyMap });
+  const out = new Map();
+  keyMap.forEach((_, key) => {
+    if (target.has(key)) {
+      out.set(key, target.get(key));
+    }
+  });
+
+  return out;
 }

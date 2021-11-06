@@ -1,5 +1,5 @@
 import {
-  catchError, filter, observeOn, subscribeOn, switchMap, tap,
+  catchError, filter, observeOn, subscribeOn, switchMap, tap, distinct,
 } from 'rxjs/operators';
 import {
   queueScheduler,
@@ -12,7 +12,7 @@ import {
   animationFrameScheduler,
   from,
   throwError, combineLatest, BehaviorSubject,
-} from 'rxjs';
+  } from 'rxjs';
 import _ from 'lodash';
 import watch from '../watch';
 
@@ -48,6 +48,28 @@ tapTest.test('expeiments', (i) => {
     d.ok(isDraftable(obj));
 
     d.end();
+  });
+
+  i.test('switchMap distinct', (sd) => {
+    const sub = new BehaviorSubject([]);
+
+    const distinctValues = [];
+
+    sub.pipe(
+      switchMap((list) => from(list)),
+      distinct(),
+    ).subscribe((aDistinct) => {
+      distinctValues.push(aDistinct);
+    });
+
+    sub.next([1, 2]);
+    sub.next([1, 2, 3]);
+    sub.next([2, 3, 5]);
+    sub.next([4, 5, 6]);
+    sub.complete();
+
+    sd.same(distinctValues, [1, 2, 3, 5, 4, 6]);
+    sd.end();
   });
 
   i.test('drafting numbers', (dn) => {

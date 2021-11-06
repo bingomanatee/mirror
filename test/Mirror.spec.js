@@ -2,6 +2,7 @@ import tap from 'tap';
 import _ from 'lodash';
 import { map } from 'rxjs/operators';
 import watch from '../watch';
+
 const p = require('../package.json');
 
 const subjectName = 'Mirror';
@@ -10,7 +11,12 @@ const lib = require('../lib/index');
 const {
   TYPE_VALUE,
   TYPE_OBJECT,
-  STAGE_INIT, STAGE_VALIDATE, STAGE_PERFORM, STAGE_POST, STAGE_FINAL,STAGE_ERROR,
+  STAGE_INIT,
+  STAGE_VALIDATE,
+  STAGE_PERFORM,
+  STAGE_POST,
+  STAGE_FINAL,
+  STAGE_ERROR,
   utils,
 } = lib;
 
@@ -67,6 +73,7 @@ tap.test(p.name, (suite) => {
       tTest.same(m.value, 2);
       tTest.same(errors.length, 0);
       tTest.same(history, [1, 2]);
+
       m.next(4);
       tTest.same(m.value, 4);
       tTest.same(errors.length, 0);
@@ -134,7 +141,7 @@ tap.test(p.name, (suite) => {
 
       m.complete();
       tTest.end();
-    }, {skip: true});
+    }, { skip: true });
 
     suiteTests.test('test ($try/$catch)', (tTest) => {
       const m = new Subject(1, {
@@ -207,7 +214,7 @@ tap.test(p.name, (suite) => {
 
       m.complete();
       tTest.end();
-    }, {skip: true});
+    }, { skip: true });
 
     suiteTests.test('test ($try/$then/$catch)', (tTest) => {
       const m = new Subject(1, {
@@ -278,7 +285,7 @@ tap.test(p.name, (suite) => {
 
       m.complete();
       tTest.end();
-    }, {skip: true});
+    }, { skip: true });
 
     suiteTests.test('events', (ev) => {
       ev.test('events - basic', (ee) => {
@@ -286,7 +293,10 @@ tap.test(p.name, (suite) => {
 
         const [{
           history,
-        }] = watch(m.$_eventQueue.pipe(map((e) => ({ ...e, value: e.value }))));
+        }] = watch(m.$_eventQueue.pipe(map((e) => ({
+          ...e,
+          value: e.value,
+        }))));
         m.$event('send', 'event');
         ee.same(
           _.map(history, (item) => _.pick(item, ['value', '$stage'])),
@@ -441,7 +451,10 @@ tap.test(p.name, (suite) => {
 
     suiteTests.test('children', (ch) => {
       ch.test('basic ', (bas) => {
-        const m = new Subject({ x: 0, y: 0 }, {
+        const m = new Subject({
+          x: 0,
+          y: 0,
+        }, {
           children: { z: 0 },
           name: 'xyz',
         });
@@ -450,20 +463,61 @@ tap.test(p.name, (suite) => {
 
         const [{ history }] = watch(m);
 
-        bas.same(history, [{ x: 0, y: 0, z: 0 }]);
-        bas.same(m.value, { x: 0, y: 0, z: 0 });
+        bas.same(history, [{
+          x: 0,
+          y: 0,
+          z: 0,
+        }]);
+        bas.same(m.value, {
+          x: 0,
+          y: 0,
+          z: 0,
+        });
         bas.same(m.$children.get('z').value, 0);
 
-        m.next({ x: 1, y: 1, z: 1 });
-        bas.same(m.value, { x: 1, y: 1, z: 1 });
+        m.next({
+          x: 1,
+          y: 1,
+          z: 1,
+        });
+        bas.same(m.value, {
+          x: 1,
+          y: 1,
+          z: 1,
+        });
         bas.same(m.$children.get('z').value, 1);
-        bas.same(history, [{ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }]);
+        bas.same(history, [{
+          x: 0,
+          y: 0,
+          z: 0,
+        }, {
+          x: 1,
+          y: 1,
+          z: 1,
+        }]);
 
-        m.$children.get('z').next(2);
+        m.$children.get('z')
+          .next(2);
 
-        bas.same(m.value, { x: 1, y: 1, z: 2 });
+        bas.same(m.value, {
+          x: 1,
+          y: 1,
+          z: 2,
+        });
         bas.same(m.$children.get('z').value, 2);
-        bas.same(history, [{ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { x: 1, y: 1, z: 2 }]);
+        bas.same(history, [{
+          x: 0,
+          y: 0,
+          z: 0,
+        }, {
+          x: 1,
+          y: 1,
+          z: 1,
+        }, {
+          x: 1,
+          y: 1,
+          z: 2,
+        }]);
 
         bas.end();
       });
@@ -483,8 +537,14 @@ tap.test(p.name, (suite) => {
           sc.end();
         });
         dv.test('(object)', (sc) => {
-          const m = new Subject({ foo: 1, bar: 2 }, { type: TYPE_VALUE });
-          sc.same(m.value, { foo: 1, bar: 2 });
+          const m = new Subject({
+            foo: 1,
+            bar: 2,
+          }, { type: TYPE_VALUE });
+          sc.same(m.value, {
+            foo: 1,
+            bar: 2,
+          });
 
           m.$delete('foo');
           sc.same(m.value, { bar: 2 });
@@ -503,8 +563,14 @@ tap.test(p.name, (suite) => {
         dv.end();
       });
       del.test('TYPE_OBJECT', (sc) => {
-        const m = new Subject({ foo: 1, bar: 2 });
-        sc.same(m.value, { foo: 1, bar: 2 });
+        const m = new Subject({
+          foo: 1,
+          bar: 2,
+        });
+        sc.same(m.value, {
+          foo: 1,
+          bar: 2,
+        });
 
         m.$delete('foo');
         sc.same(m.value, { bar: 2 });
@@ -521,6 +587,83 @@ tap.test(p.name, (suite) => {
       });
       del.end();
     });
+
+    suiteTests.test('$mutate', (mut) => {
+      mut.test('object', (mutObj) => {
+        const m = new Subject({
+          a: 1,
+          b: 2,
+        });
+        const [{ history }] = watch(m);
+
+        m.$mutate((draft) => {
+          const {
+            a,
+            b,
+          } = draft;
+          return {
+            a: b,
+            b: a,
+          };
+        });
+
+        mutObj.same(history, [{
+          a: 1,
+          b: 2,
+        }, {
+          a: 2,
+          b: 1,
+        }]);
+
+        mutObj.end();
+      });
+
+      mut.end();
+    });
+
+    suiteTests.test('actions', (act) => {
+      const m = new Subject({
+        a: 1,
+        b: 2,
+      }, {
+        actions: {
+          double: (mirror) => {
+            mirror.$do.setA(mirror.value.a * 2);
+            mirror.$do.setB(mirror.value.b * 2);
+          },
+
+          scale: (mirror, power) => {
+            mirror.$do.setA(mirror.value.a * power);
+            mirror.$do.setB(mirror.value.b * power);
+          },
+        },
+      });
+
+      const [{ history }] = watch(m);
+
+      const FIRST = { a: 1, b: 2 };
+      act.same(history, [FIRST]);
+
+      m.$do.setA(4);
+
+      const SECOND = { a: 4, b: 2 };
+      act.same(history, [FIRST, SECOND]);
+
+      m.$do.double();
+
+      const THIRD = { a: 8, b: 2 };
+      const FOURTH = { a: 8, b: 4 };
+      act.same(history, [FIRST, SECOND, THIRD, FOURTH]);
+
+      m.$do.scale(0.5);
+
+      console.log('--- history:', history);
+      const FIFTH = { a: 4, b: 4 };
+      act.same(history, [FIRST, SECOND, THIRD, FOURTH, FIFTH, SECOND]);
+
+      act.end();
+    });
+
     suiteTests.end();
   });
 

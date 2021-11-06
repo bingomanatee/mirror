@@ -1,9 +1,10 @@
 /* eslint-disable */
 // noinspection UnreachableCodeJS
 
-import { BehaviorSubject, combineLatest, combineLatestWith, from, of, Subject } from 'rxjs';
+import { BehaviorSubject, combineLatest, combineLatestWith, distinct, from, of, Subject } from 'rxjs';
 import produce, { enableMapSet, isDraft } from 'immer';
 import isEqual from 'lodash/isEqual';
+import uniq from 'lodash/uniq';
 
 enableMapSet();
 import {
@@ -20,15 +21,16 @@ import {
   TYPE_MAP,
   TYPE_OBJECT,
   TYPE_VALUE,
-  defaultStageMap, defaultNextStages
+  defaultStageMap, defaultNextStages, EVENT_TYPE_MUTATE, EVENT_TYPE_ACTION, SET_RE, TRANS_TYPE_CHANGE
 } from './constants';
 import {
-  toMap, toObj, isMap, isObj, noop, maybeImmer, e, isFn, isThere, isArr, isStr, unsub
+  toMap, toObj, isMap, isObj, noop, maybeImmer, e, isFn, isThere, isArr, isStr, unsub, ucFirst, strip, mapFromKeys
 } from './utils';
 // import { addChild, hasChild, mirrorHas, removeChild, setParent, updateChildren } from './childParentUtils';
-import { mirrorType, initQueue } from './mirrorMisc';
+import { mirrorType, initQueue, makeDoProxy, makeDoObj, lazy } from './mirrorMisc';
 import { catchError, distinctUntilKeyChanged, filter, map, switchMap, finalize, tap } from 'rxjs/operators';
 import MirrorEvent from './MirrorEvent';
+import MirrorTrans from './MirrorTrans';
 
 /**
  * Mirror is a special extension of BehaviorSubject; it shards its sub-properties into children
@@ -58,7 +60,15 @@ export default class Mirror extends BehaviorSubject {
       type = ABSENT,
       parent = ABSENT,
       children = ABSENT,
+      actions = ABSENT,
     } = toObj(config);
+
+    if (isThere(actions) && isObj(actions)) {
+      Object.keys(actions)
+        .forEach((actionName) => {
+          this.$addAction(actionName, actions[actionName]);
+        });
+    }
 
     if (isThere(name)) {
       this.$name = name;
@@ -96,6 +106,20 @@ export default class Mirror extends BehaviorSubject {
     return this.$type === TYPE_VALUE;
   }
 
+  $keys() {
+    const childKeys = this.$_children ? Array.from(this.$children.keys()) : [];
+    let valueKeys = [];
+    if (this.$type === TYPE_MAP) {
+      const valueKeys = Array.from(this.value.keys());
+    }
+    if (this.$type === TYPE_OBJECT) {
+      valueKeys = Array.from(Object.keys(this.value));
+    }
+    const uniqValKeys = valueKeys.filter(key => !childKeys.includes(key));
+    return [...uniqValKeys, ...childKeys].filter(k => isStr(k, true))
+      .sort();
+  }
+
   /** *************** Subject handlers ****************** */
 
   /**
@@ -113,18 +137,49 @@ export default class Mirror extends BehaviorSubject {
     }
   }
 
-  getValue() {
-    let value = isThere(this.$_trialValue) ? this.$_trialValue : super.getValue();
+  get $_lastQueuedValue() {
+    if (!this._changeQueue.isStopped) {
+      let index = this._changeQueue.value.length - 1;
+      while (index >= 0) {
+        const queueSub = this._changeQueue.value[index];
+        if (queueSub && (!queueSub.isStopped)) {
+          return queueSub.value;
+        }
+        index -= 1;
+      }
+    }
+    return ABSENT;
+  }
 
+  /**
+   * returns the value that is queued to replace the current value.
+   * If there is no pending value, returns the actual current value.
+   * @returns {*}
+   */
+  get $_pendingValue() {
+    let queuedValue = this.$_lastQueuedValue;
+    if (queuedValue !== ABSENT) {
+      return queuedValue;
+    }
+    return isThere(this.$_trialValue) ? this.$_trialValue : super.getValue(); // $_trialValue is being deprecated
+  }
+
+  getValue() {
+    let value = this.$_pendingValue;
     if (this.$isValue) {
       return value;
     }
     return this.$_valueWithChildren(value);
   }
 
+  /**
+   * override/assert child values over the current value.
+   * @param value
+   * @returns {symbol}
+   */
   $_valueWithChildren(value = ABSENT) {
     if (!isThere(value)) {
-      value = value = isThere(this.$_trialValue) ? this.$_trialValue : super.getValue();
+      value = value = this.$_pendingValue;
     }
 
     const target = this;
@@ -146,51 +201,23 @@ export default class Mirror extends BehaviorSubject {
   /** *************** try/catch, validation ****************** */
 
   /**
-   * ordinarily when you next(), the value is submitted synchronously.
-   * $try(v).$then(fn).$catch(fn).$finally(fn);
-   * allows you to react dynamically to errors if isThere before bad data is rejected.
-   *
-   * ---- implicit actions
-   * ---- $try(v) submits the value to trial value; the value of the Mirror is then locked in to the new value,
-   *              BUT NO SUBSCRIPTIONS are notified.
-   * ---- $then() commits the trial value - if isThere are no errors -- which also clears the trial value, THEN calls the hook
-   * ---- $catch() passes errors to the hook, calls the hook, THEN, clears the trial value.
-   * ---- $finally() commits the trial value or clears it if isThere are errors, THEN calls the hook.
-   *
-   * committing WILL notify subscribers that changes have happened.
-   *
-   * ----------- alternate all in one $try ---------
-   * $try(value, thenFn, catchFn, finalFn)
-   * calls all or part of the try/then/catch/finally sequence, if one or more functions are passed in after the first one.
-   *
-   * ----------- the "TAKE TWO" rule -------------
-   *
-   * note; unlike promise try/catch, $try chains are synchronous. they just let you intercept side effects of change.
-   * its not a good idea to call $try(candidate) without either $catch(), $flush or $finally] in the same line.
-   * A "hanging $try()" leaves the trial value in place as the mirror's value
-   * even if the value is bad, and just as bad doesn't notify subscribers.
-   *
-   * Also, the try handlers must be called IN THAT ORDER.
-   *
-   * lastly, $flush() , like
+   * $_try needs to be updated -- its not really where it should be
+   * @param value
    */
-
-  $_try(value) {
+  $_try(value, parent = ABSENT) {
     if (this.isStopped) {
       throw e('cannot try value on stopped Mirror', {
         value,
         target: this
       });
     }
-    this.$_trialValue = value;
 
-    if (this.$isContainer) {
-      this.$children.forEach((child, name) => {
-        if (this.$valueHas(name, value)) {
-          child.$_try(this.$valueGet(name, value));
-        }
-      });
-    }
+    this.$_addToQueue({
+      value,
+      type: TRANS_TYPE_CHANGE,
+      parent,
+      sharded: !this.$isContainer
+    });
   }
 
   get $isTrying() {
@@ -233,7 +260,9 @@ export default class Mirror extends BehaviorSubject {
   $_listen() {
     this.$on(
       EVENT_TYPE_NEXT,
-      (value, p, t) => {t.$_try(value)},
+      (value, p, t) => {
+        t.$_try(value);
+      },
       STAGE_INIT
     );
     this.$on(
@@ -253,6 +282,67 @@ export default class Mirror extends BehaviorSubject {
       (value, p, t) => t.$commit(),
       STAGE_FINAL
     );
+
+    this.$on(
+      EVENT_TYPE_MUTATE,
+      ({
+        fn,
+        args
+      }, p, t) => {
+        try {
+          let nextValue = produce(t.value, (draft) => {
+            return fn(draft, t, ...args);
+          });
+          p.next({
+            fn,
+            args,
+            nextValue
+          });
+        } catch (err) {
+          p.error(err);
+        }
+      },
+      STAGE_PERFORM
+    );
+
+    this.$on(
+      EVENT_TYPE_MUTATE,
+      ({
+        fn,
+        args,
+        nextValue
+      }, p, t) => {
+        const nextEvent = t.next(nextValue);
+        if (nextEvent && nextEvent.thrownError) {
+          p.error(nextEvent.thrownError);
+        }
+        else {
+          p.next({
+            fn,
+            args,
+            nextValue,
+            next: t.value
+          });
+        }
+      },
+      STAGE_FINAL
+    );
+
+    this.$on(EVENT_TYPE_ACTION, ({
+      name,
+      args
+    }, p, t) => {
+      if (!t.$_actions.has(name)) {
+        p.error(e('no action named ' + name));
+      }
+      else {
+        try {
+          t.$_actions.get(name)(t, ...args);
+        } catch (err) {
+          p.error(err);
+        }
+      }
+    });
   }
 
   /**
@@ -260,21 +350,79 @@ export default class Mirror extends BehaviorSubject {
    * @returns {Observable}
    */
   get $_eventQueue() {
-    if (!this.$__eventQueue) {
-      const target = this;
-      this.$__eventQueue = new Subject()
-        .pipe(
-          switchMap((value) => from([value]))
-        );
-    }
-    return this.$__eventQueue;
+    return lazy(this, '$__eventQueue', () => new Subject()
+      .pipe(switchMap((value) => from([value]))));
   }
 
-  get $_stages() {
-    if (!this.$__stages) {
-      return defaultStageMap;
+  /**
+   *
+   * This holds a list of Subjects whose values are candidates under inspection for replacement
+   * for the mirrors' current value.
+   *
+   * When a candidate is rejected, it _and all subsequent values_ are flushed from the list.
+   * When a candidate is accepted, it replaces the core BehaviorSubjects' value.
+   * This queue is observed and its values are sharded up the tree to any children.
+   *
+   * @returns {BehaviorSubject}
+   */
+  get $_changeQueue() {
+    return lazy(this, '$_changeQueue', (target) => {
+      const queue = new Subject();
+      queue.subscribe({
+        next(queue) {
+          target.$_upsertToProcessQueue(queue);
+        },
+        error(err) {
+          console.log('error  in changeQueue', err);
+        }
+      });
+      return queue;
+    });
+  }
+
+  $_upsertToProcessQueue(item) {
+    if (this.$_pending.some((candidate) => candidate.id === item.id)) {
+      let list = this.$_pending.map((candidate) => {
+        return candidate.id === item.id ? item : candidate;
+      });
+
+      this.$_pending.next(produce(list, (draft) => draft));
     }
-    return this.$__stages;
+    else {
+      this.$_pending.next(produce([...this.$_pending.value, item], (draft) => draft));
+    }
+  }
+
+  get $_pending() {
+    return lazy(this, '$__pending', () => {
+      const pending = new BehaviorSubject([]);
+      pending.subscribe({
+        next(list) {
+
+        }
+      })
+      return pending;
+    });
+  }
+
+  set $_pending(list) {
+    this.$__pending = produce(list, (l) => l);
+  }
+
+  $_addToQueue(def) {
+    if (this.isStopped) {
+      throw e('cannot transact on stopped mirror', { trans: def });
+    }
+    const trans = produce(def, (draft) => new MirrorTrans(draft));
+    this.$_changeQueue.next(trans);
+  }
+
+  /**
+   *
+   * @returns {Map}
+   */
+  get $_stages() {
+    return lazy(this, '$__stages', () => new Map(defaultStageMap));
   }
 
   /**
@@ -286,17 +434,19 @@ export default class Mirror extends BehaviorSubject {
   $_stagesFor(type, value) {
     if (this.$_stages.has(type)) {
       return this.$_stages.get(type);
-    } else {
+    }
+    else {
       return defaultNextStages;
     }
   }
 
   $setStages(type, list) {
-    if (!this.$__stages) {
-      this.$__stages = new Map(defaultStageMap);
+    if (!isArr(list)) {
+      throw e('bad input to $setStages', {
+        type,
+        list
+      });
     }
-
-    if (!isArr(list)) throw e('bad input to $setStages', {type, list});
 
     this.$_stages.set(type, list);
   }
@@ -308,7 +458,7 @@ export default class Mirror extends BehaviorSubject {
     event.subscribe({
       complete() {
         if (isFn(onComplete)) {
-          target.$_do(onComplete)
+          target.$_do(onComplete);
         }
       },
       error(err) {
@@ -342,6 +492,7 @@ export default class Mirror extends BehaviorSubject {
     if (!event.isStopped) {
       event.complete();
     }
+    return event;
   }
 
   $once($type, handler, ...rest) {
@@ -518,25 +669,6 @@ export default class Mirror extends BehaviorSubject {
   }
 
   /**
-   *
-   * @param key
-   * @param subject
-   * @returns {any}
-   */
-  $_strip(key, subject) {
-    let stripped = null;
-    if (this.$type === TYPE_MAP) {
-      stripped = new Map(subject);
-      stripped.delete(key);
-    }
-    if (this.$type === TYPE_OBJECT) {
-      stripped = { ...subject };
-      delete stripped[key];
-    }
-    return stripped;
-  }
-
-  /**
    * returns false if any children are invalid.
    * @returns {boolean}
    */
@@ -551,10 +683,11 @@ export default class Mirror extends BehaviorSubject {
   }
 
   get $children() {
-    if (!this.$_children) {
-      this.$_children = new Map();
-    }
-    return this.$_children;
+    return lazy(this, '$_children', () => new Map());
+  }
+
+  get $_childSubs() {
+    return lazy(this, '$__childSubs', () => new Map());
   }
 
   $addChild(name, value, type = TYPE_VALUE) {
@@ -602,98 +735,155 @@ export default class Mirror extends BehaviorSubject {
     this.next(this.getValue());
   }
 
-  $hasChild(name) {
-    if (!this.$_children) {
+  $has(key) {
+    if (!this.$isContainer) {
       return false;
     }
-    return this.$children.has(name);
+    if (this.$hasChild(key)) {
+      return true;
+    }
+
+    if (this.$type === TYPE_MAP) {
+      return this.value.has(key);
+    }
+    if (this.$type === TYPE_OBJECT) {
+      return key in this.value;
+    }
   }
 
-  $delete(name, persistChild = false) {
-    let prevValue = this.getValue();
-    let valueAfterDelete = prevValue;
-    let child = null;
-    let removed = null;
-    let childSub = null;
-    let onCommit;
-    const target = this;
+  $hasChild(name) {
+    // note - respecting the lazy nature of $children
+    return this.$_children && this.$children.has(name);
+  }
 
-    if (this.$isValue) {
-      if (isMap(valueAfterDelete)) {
-        valueAfterDelete = new Map(prevValue);
-        removed = valueAfterDelete.get(name);
-        valueAfterDelete.delete(name);
+  $removeChild(name) {
+    if (this.$hasChild(name)) {
+      const child = this.$children.get(name);
+      this.$children.delete(name);
+      if (!child.isStopped) {
+        child.complete();
       }
-      if (isObj(valueAfterDelete)) {
-        valueAfterDelete = { ...prevValue };
-        removed = valueAfterDelete[name];
-        valueAfterDelete = produce(valueAfterDelete, (draft) => {
-          delete draft[name];
-        });
-      }
-    }
-
-    if (this.$isContainer) {
-      if (this.$hasChild(name)) {
-        child = this.$children.get(name);
-        removed = child.value;
-      }
-
       if (this.$_childSubs.has(name)) {
-        childSub = this.$_childSubs.get(name);
+        try {
+          this.$_childSubs.get(name)
+            .unsubscribe();
+        } catch (err) {
+          console.warn('childSub error unsubscribing:', err);
+        }
       }
-
-      onCommit = () => {
-        if (!child && persistChild) {
-          child.complete();
-          target.$children.delete(name);
-        }
-        if (childSub) {
-          childSub.unsubscribe();
-          target.$_childSubs.delete(name);
-        }
-      };
-
-      valueAfterDelete = this.$_strip(name, valueAfterDelete);
     }
-    if (this.$isTrying) {
-      this.$_trialValue = valueAfterDelete;
-      if (onCommit) {
-        let subRevert;
-        let subCommit;
-        subRevert = this.$on(EVENT_TYPE_REVERT, () => {
-          unsub(subCommit);
-          unsub(subRevert);
-        });
-        subCommit = this.$on(EVENT_TYPE_COMMIT, () => {
-          if (isFn(onCommit)) {
-            onCommit();
-          }
-          unsub(subCommit);
-          unsub(subRevert);
-        });
-      }
+  }
+
+
+  $delete(name) {
+    let event = this.$mutate((draft) => {
+      return strip(name, draft);
+    });
+
+    const target = this;
+    if (event && !event.isStopped) {
+      event.subscribe({
+        error() {
+
+        },
+        complete() {
+          target.$removeChild(name);
+        }
+      });
     }
     else {
-      if (onCommit) {
-        onCommit();
-      }
-      this.next(valueAfterDelete);
+      this.$removeChild(name);
     }
-    return {
-      target: this,
-      value: this.getValue(),
-      valueAfterDelete,
-      prevValue,
-      removed,
-      child
-    };
   }
 
-  get $_childSubs() {
-    if (!this.$__childSubs) {
-      this.$__childSubs = new Map();
+  /******* actions *********** */
+
+  $mutate(fn, ...args) {
+    if (!isFn(fn)) {
+      throw e('$mutate passed non-function', { fn });
     }
-    return this.$__childSubs;
+
+    return this.$event(EVENT_TYPE_MUTATE, {
+      fn,
+      args
+    });
+  }
+
+  $set(name, value) {
+    if (!this.$isContainer) {
+      throw e('cannot set to non-container', {
+        name,
+        value,
+        target: this
+      });
+    }
+
+    if (this.$hasChild(name)) {
+      return this.$children.get(name)
+        .set(value);
+    }
+    if (this.$type === TYPE_MAP) {
+      return this.$mutate((draft) => {
+        draft.set(name, value);
+      });
+    }
+    if (this.$type === TYPE_OBJECT) {
+      return this.$mutate((draft) => {
+        draft[name] = value;
+      });
+    }
+  }
+
+  get $_actions() {
+    return lazy(this, '$__actions', () => new Map());
+  }
+
+  $keyFor(fieldName) {
+    if (!this.$isContainer) {
+      return null;
+    }
+    if (!isStr(fieldName)) {
+      return null;
+    }
+    if (this.$has(fieldName)) {
+      return fieldName;
+    }
+    const lowerCaseFieldName = fieldName.toLowerCase();
+    let match = null;
+    const test = key => {
+      if (isStr(key) && key.toLowerCase() === lowerCaseFieldName) {
+        match = key;
+      }
+    };
+    if (this.$type === TYPE_MAP) {
+      this.value.forEach(test);
+    }
+    if (this.$type === TYPE_OBJECT) {
+      Object.keys(this.value)
+        .forEach(test);
+    }
+    return match;
+  }
+
+  get $_doObj() {
+    return lazy(this, '$__doObj', makeDoObj);
+  }
+
+  get $_doProxy() {
+    return lazy(this, '$__doProxy', makeDoProxy);
+  }
+
+  get $do() {
+    if (typeof Proxy === undefined) {
+      return this.$_doObj;
+    }
+    return this.$_doProxy;
+  }
+
+  $addAction(name, fn) {
+    if (this.$_actions.has(name)) {
+      console.warn('overwriting existing action in mirror', this);
+    }
+    this.$_actions.set(name, fn);
   }
 }
