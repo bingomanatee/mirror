@@ -49,64 +49,6 @@ export default (BaseClass) => class WithChildren extends BaseClass {
       (value, p, t) => t.$commit(),
       STAGE_FINAL,
     );
-
-    this.$on(
-      EVENT_TYPE_MUTATE,
-      ({
-        fn,
-        args,
-      }, p, t) => {
-        try {
-          const nextValue = produce(t.value, (draft) => fn(draft, t, ...args));
-          p.next({
-            fn,
-            args,
-            nextValue,
-          });
-        } catch (err) {
-          p.error(err);
-        }
-      },
-      STAGE_PERFORM,
-    );
-
-    this.$on(
-      EVENT_TYPE_MUTATE,
-      ({
-        fn,
-        args,
-        nextValue,
-      }, p, t) => {
-        const nextEvent = t.next(nextValue);
-        if (nextEvent && nextEvent.thrownError) {
-          p.error(nextEvent.thrownError);
-        } else {
-          p.next({
-            fn,
-            args,
-            nextValue,
-            next: t.value,
-          });
-        }
-      },
-      STAGE_FINAL,
-    );
-
-    this.$on(EVENT_TYPE_ACTION, ({
-      name,
-      args,
-    }, p, t) => {
-      if (!t.$_actions.has(name)) {
-        p.error(e(`no action named ${name}`));
-      } else {
-        try {
-          t.$_actions.get(name)(t, ...args);
-        } catch (err) {
-          p.error(err);
-        }
-      }
-    },
-    STAGE_PERFORM);
   }
 
   /**
@@ -162,11 +104,8 @@ export default (BaseClass) => class WithChildren extends BaseClass {
         }
       },
       error(err) {
-        target.$_eventQueue.next({
-          value: err,
-          $type: type,
-          $stage: STAGE_ERROR,
-        });
+        event.$stage = STAGE_ERROR;
+        target.$_eventQueue.next(event);
         if (isFn(onFail)) {
           target.$_do(onFail, err);
         }
@@ -184,8 +123,6 @@ export default (BaseClass) => class WithChildren extends BaseClass {
       }
       if (event.isStopped) {
         break;
-      } else {
-        value = event.value;
       }
     }
     if (!event.isStopped) {
@@ -195,18 +132,16 @@ export default (BaseClass) => class WithChildren extends BaseClass {
   }
 
   $once($type, handler, ...rest) {
-    let sub;
-    const tap = (...args) => {
+    const sub = this.$on($type, (...args) => {
       try {
         const out = handler(...args);
-        unsub(sub);
+        sub.unsubscribe();
         return out;
       } catch (err) {
-        unsub(sub);
+        sub.unsubscribe();
         throw err;
       }
-    };
-    sub = this.$on($type, tap, ...rest);
+    }, ...rest);
     return sub;
   }
 
@@ -232,13 +167,8 @@ export default (BaseClass) => class WithChildren extends BaseClass {
           console.log('$on error:', err);
         },
         next(phase) {
-          const {
-            $type: type,
-            $stage: stage,
-            value,
-          } = phase;
           try {
-            handler(value, phase, target);
+            handler(phase.value, phase, target);
           } catch (err) {
             if (!phase.isStopped) {
               phase.error(err);

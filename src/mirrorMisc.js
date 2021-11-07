@@ -152,7 +152,7 @@ export function makeDoProxy(mirror) {
 export function makeDoObj(target) {
   const doObj = {};
   this.$_actions.forEach((fn, name) => {
-    doObj[name] = (...args) => target.$event(EVENT_TYPE_ACTION, { name, args });
+    doObj[name] = (...args) => target.$action(name, args);
   });
   if (this.$isContainer) {
     this.$keys.forEach((name) => {

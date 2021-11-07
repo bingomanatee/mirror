@@ -107,4 +107,27 @@ export default (BaseClass) => class WithChildren extends BaseClass {
       });
     });
   }
+
+  $hasChild(name) {
+    // note - respecting the lazy nature of $children
+    return this.$_children && this.$children.has(name);
+  }
+
+  $removeChild(name) {
+    if (this.$hasChild(name)) {
+      const child = this.$children.get(name);
+      this.$children.delete(name);
+      if (!child.isStopped) {
+        child.complete();
+      }
+      if (this.$_childSubs.has(name)) {
+        try {
+          this.$_childSubs.get(name)
+            .unsubscribe();
+        } catch (err) {
+          console.warn('childSub error unsubscribing:', err);
+        }
+      }
+    }
+  }
 };

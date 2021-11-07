@@ -134,7 +134,11 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
       // do not validate first value; accept it no matter what
       super.next(nextValue);
     } else {
-      return this.$event(EVENT_TYPE_NEXT, nextValue);
+      const event = this.$event(EVENT_TYPE_NEXT, nextValue);
+      if (event.hasError) {
+
+      }
+      return event;
     }
   }
 
@@ -282,19 +286,6 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
 
   /******* containers *********** */
 
-  $valueHas(key, value = ABSENT) {
-    if (!this.$isContainer) {
-      return false;
-    }
-    if (!isThere(value)) {
-      value = this.getValue();
-    }
-    if (this.$type === TYPE_MAP) {
-      return value.has(key);
-    }
-    return key in value;
-  }
-
   $valueGet(key, value = ABSENT) {
     if (!this.$isContainer) {
       return false;
@@ -324,30 +315,6 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
     }
   }
 
-  $hasChild(name) {
-    // note - respecting the lazy nature of $children
-    return this.$_children && this.$children.has(name);
-  }
-
-  $removeChild(name) {
-    if (this.$hasChild(name)) {
-      const child = this.$children.get(name);
-      this.$children.delete(name);
-      if (!child.isStopped) {
-        child.complete();
-      }
-      if (this.$_childSubs.has(name)) {
-        try {
-          this.$_childSubs.get(name)
-            .unsubscribe();
-        } catch (err) {
-          console.warn('childSub error unsubscribing:', err);
-        }
-      }
-    }
-  }
-
-
   $delete(name) {
     let event = this.$mutate((draft) => {
       return strip(name, draft);
@@ -368,45 +335,4 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
     }
   }
 
-  /******* actions *********** */
-
-  $mutate(fn, ...args) {
-    if (!isFn(fn)) {
-      throw e('$mutate passed non-function', { fn });
-    }
-
-    return this.$event(EVENT_TYPE_MUTATE, {
-      fn,
-      args
-    });
-  }
-
-  $set(name, value) {
-    if (!this.$isContainer) {
-      throw e('cannot set to non-container', {
-        name,
-        value,
-        target: this
-      });
-    }
-
-    if (this.$hasChild(name)) {
-      return this.$children.get(name)
-        .set(value);
-    }
-    if (this.$type === TYPE_MAP) {
-      return this.$mutate((draft) => {
-        draft.set(name, value);
-      });
-    }
-    if (this.$type === TYPE_OBJECT) {
-      return this.$mutate((draft) => {
-        draft[name] = value;
-      });
-    }
-  }
-
-  get $_actions() {
-    return lazy(this, '$__actions', () => new Map());
-  }
 }

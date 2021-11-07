@@ -2,7 +2,14 @@
 import produce from 'immer';
 import { BehaviorSubject } from 'rxjs';
 import {
-  ABSENT, EVENT_TYPE_ACTION, STAGE_INIT, STAGE_PERFORM, TRANS_STATE_COMPLETE, TRANS_TYPE_ACTION, TRANS_TYPE_CHANGE,
+  ABSENT,
+  EVENT_TYPE_ACTION,
+  EVENT_TYPE_NEXT,
+  STAGE_INIT,
+  STAGE_PERFORM,
+  TRANS_STATE_COMPLETE, TRANS_STATE_ERROR,
+  TRANS_TYPE_ACTION,
+  TRANS_TYPE_CHANGE,
 } from './constants';
 import { e, isThere } from './utils';
 import { lazy } from './mirrorMisc';
@@ -12,23 +19,31 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
   constructor(...init) {
     super(...init);
 
-    this.$on(STAGE_INIT, ({
-      name,
-      args,
-    }, p, t) => {
-      const trans = t.$_addTrans({})
+    this.$on(EVENT_TYPE_NEXT, (value, p, t) => {
+      const trans = t.$_addTrans({
+        value,
+        type: TRANS_TYPE_CHANGE,
+      });
+      p.$trans = trans;
+      p.subscribe({
+        complete() {
+          t.$_updateTrans(trans, (draft) => {
+            draft.complete();
+          });
+        },
+        error(err) {
+          t.$_updateTrans(trans, (draft) => {
+            draft.error(err);
+          });
+        },
+      });
     },
     STAGE_PERFORM);
   }
 
   get $_pending() {
-    return lazy(this, '$__pending', (target) => {
+    return lazy(this, '$__pending', () => {
       const pending = new BehaviorSubject([]);
-      pending.subscribe({
-        next(list) {
-          target.$_flushPendingIfDone(list);
-        },
-      });
       return pending;
     });
   }
@@ -36,7 +51,7 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
   $_upsertTrans(item) {
     let list = [...this.$_pending.value];
     if (list.some((candidate) => candidate.id === item.id)) {
-      list = this.$_pending.map((candidate) => (candidate.id === item.id ? item : candidate));
+      list = this.$_pending.value.map((candidate) => (candidate.id === item.id ? item : candidate));
     } else {
       list.push(item);
     }
@@ -50,7 +65,9 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
    * @param list
    */
   $_flushPendingIfDone(list) {
-    if (!isThere(list)) return this.$_flushPendingIfDone(this.$_pending.value);
+    if (!isThere(list)) {
+      return this.$_flushPendingIfDone(this.$_pending.value);
+    }
     if (list.length) {
       if (list.every((transaction) => transaction.state === TRANS_STATE_COMPLETE)) {
         if (this.$isContainer) {
@@ -75,7 +92,9 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
    * @param list
    */
   $_commitTrans(list = ABSENT) {
-    if (!isThere(list)) return this.$_commitTrans(this.$_pending.value);
+    if (!isThere(list)) {
+      return this.$_commitTrans(this.$_pending.value);
+    }
     const changes = list.filter((trans) => trans.type === TRANS_TYPE_CHANGE);
     const lastChange = changes.pop();
     if (lastChange && isThere(lastChange.value)) {
@@ -109,8 +128,8 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
     if (this.isStopped) {
       throw e('cannot transact on stopped mirror', { trans: def });
     }
-    const trans = produce(def, (draft) => new MirrorTrans(draft));
-    this.$_upsertTrans(produce(def, (draft) => new MirrorTrans(draft)));
+    const trans = produce(def, (draft) => MirrorTrans.make(draft));
+    this.$_upsertTrans(trans);
     if (trans.type === TRANS_TYPE_CHANGE) {
       this.$_sendToChildren(trans.value);
     }
@@ -130,6 +149,28 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
       this.$_upsertTrans(nextTrans);
       return nextTrans;
     }
+    console.log('cannot find match for ', matchTo, 'in', this.$_pending.value);
+
     return null;
+  }
+
+  $revertTrans(trans) {
+    if (this.$isContainer) {
+      this.$children.forEach((child) => child.$revertTrans(trans));
+    }
+    const list = this.$_pending.value.filter((aTrans) => aTrans.before(trans));
+    this.$_pending.next(list);
+  }
+
+  $postEvent(event) {
+    if (!event) {
+      return;
+    }
+    if (event.hasError) {
+      if (event.$trans) {
+        this.$revertTrans(event.$trans);
+      }
+      throw event.thrownError;
+    }
   }
 });

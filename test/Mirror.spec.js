@@ -17,6 +17,11 @@ const {
   STAGE_POST,
   STAGE_FINAL,
   STAGE_ERROR,
+  TRANS_STATE_NEW,
+  TRANS_STATE_COMPLETE,
+  TRANS_STATE_ERROR,
+  TRANS_TYPE_CHANGE,
+  TRANS_TYPE_ACTION,
   utils,
 } = lib;
 
@@ -497,26 +502,80 @@ tap.test(p.name, (suite) => {
 
       const [{ history }] = watch(m);
 
-      const FIRST = { a: 1, b: 2 };
+      const FIRST = {
+        a: 1,
+        b: 2,
+      };
       act.same(history, [FIRST]);
 
       m.$do.setA(4);
 
-      const SECOND = { a: 4, b: 2 };
+      const SECOND = {
+        a: 4,
+        b: 2,
+      };
       act.same(history, [FIRST, SECOND]);
 
       m.$do.double();
 
-      const THIRD = { a: 8, b: 2 };
-      const FOURTH = { a: 8, b: 4 };
+      const THIRD = {
+        a: 8,
+        b: 2,
+      };
+      const FOURTH = {
+        a: 8,
+        b: 4,
+      };
       act.same(history, [FIRST, SECOND, THIRD, FOURTH]);
 
       m.$do.scale(0.5);
 
-      const FIFTH = { a: 4, b: 4 };
+      const FIFTH = {
+        a: 4,
+        b: 4,
+      };
       act.same(history, [FIRST, SECOND, THIRD, FOURTH, FIFTH, SECOND]);
 
       act.end();
+    });
+
+    suiteTests.test('trans', (tr) => {
+      tr.test('setAction', (trs) => {
+        const m = new Subject({
+          a: 1,
+          b: 2,
+        });
+        const [{ trans }] = watch(m);
+        trs.same(trans, [[]]);
+        m.$do.setA(4);
+        trs.same(trans.length, 3);
+        const summary = trans.map((list) => list.map(({ state, type, value }) => ({
+          state,
+          type,
+          value,
+        })));
+        trs.same(summary, [
+          [],
+          [{
+            type: TRANS_TYPE_CHANGE,
+            value: {
+              a: 4,
+              b: 2,
+            },
+            state: TRANS_STATE_NEW,
+          }],
+          [{
+            type: TRANS_TYPE_CHANGE,
+            value: {
+              a: 4,
+              b: 2,
+            },
+            state: TRANS_STATE_COMPLETE,
+          }],
+        ]);
+        trs.end();
+      });
+      tr.end();
     });
 
     suiteTests.end();

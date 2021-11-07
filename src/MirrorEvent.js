@@ -13,13 +13,11 @@ class MirrorEvent extends BehaviorSubject {
     this.$_constructed = true;
     this.$stage = stage;
     this.$err = err;
+    this.$trans = null;
   }
 
-  error(err) {
-    if (!this.isStopped) {
-      this.complete();
-      this.$target.$_eventQueue.next(new MirrorEvent(this.value, this.$type, this.$target, STAGE_ERROR, err));
-    }
+  getValue() {
+    return this._value;
   }
 }
 
