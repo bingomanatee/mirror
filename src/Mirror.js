@@ -9,8 +9,10 @@ import uniq from 'lodash/uniq';
 enableMapSet();
 import {
   ABSENT,
-  EVENT_TYPE_CHILD_ADDED, EVENT_TYPE_COMMIT,
-  EVENT_TYPE_NEXT, EVENT_TYPE_REVERT,
+  EVENT_TYPE_CHILD_ADDED,
+  EVENT_TYPE_COMMIT,
+  EVENT_TYPE_NEXT,
+  EVENT_TYPE_REVERT,
   NAME_UNNAMED,
   STAGE_ERROR,
   STAGE_FINAL,
@@ -21,24 +23,31 @@ import {
   TYPE_MAP,
   TYPE_OBJECT,
   TYPE_VALUE,
-  defaultStageMap, defaultNextStages, EVENT_TYPE_MUTATE, EVENT_TYPE_ACTION, SET_RE, TRANS_TYPE_CHANGE
+  defaultStageMap,
+  defaultNextStages,
+  EVENT_TYPE_MUTATE,
+  EVENT_TYPE_ACTION,
+  SET_RE,
+  TRANS_TYPE_CHANGE,
+  EVENT_TYPE_TRY,
+  EVENT_TYPE_VALIDATE
 } from './constants';
 import {
   toMap, toObj, isMap, isObj, noop, maybeImmer, e, isFn, isThere, isArr, isStr, unsub, ucFirst, strip, mapFromKeys
 } from './utils';
-// import { addChild, hasChild, mirrorHas, removeChild, setParent, updateChildren } from './childParentUtils';
 import { mirrorType, initQueue, makeDoProxy, makeDoObj, lazy } from './mirrorMisc';
 import withTrans from './withTrans';
 import withAction from './withAction';
 import withChildren from './withChildren';
 import withEvents from './withEvents';
+import MirrorTrans from './MirrorTrans';
 
 /**
  * Mirror is a special extension of BehaviorSubject; it shards its sub-properties into children
  * which, when updated, update the parent.
  * This allows for field level validation, transactional updates and all sorts of other goodies.
  */
-export default class Mirror extends withAction(withChildren(withEvents(withTrans(BehaviorSubject)))) {
+export default class Mirror extends ((withEvents(withTrans(BehaviorSubject)))) {
   constructor(value, config = ABSENT) {
     super(value);
     this.$configure(config);
@@ -121,7 +130,7 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
 
   /** *************** Subject handlers ****************** */
   get $currentValue() {
-    return isThere(this.$_trialValue) ? this.$_trialValue : this._value;
+    return this.$_has_pending? this.$_last_pending.value : this._value;
   }
 
   /**
@@ -133,12 +142,20 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
     if (!this.$_constructed) {
       // do not validate first value; accept it no matter what
       super.next(nextValue);
-    } else {
+    }
+    else {
       const event = this.$event(EVENT_TYPE_NEXT, nextValue);
-      if (event.hasError) {
-
+      try {
+        this.$event(EVENT_TYPE_VALIDATE, event);
+      } catch (err) {
+        console.log('validation error: ', err);
       }
-      return event;
+      if (!this.$isValid()) {
+        const errors = this.$errors();
+        this.$event(EVENT_TYPE_REVERT, event);
+        throw errors;
+      }
+      this.$event(EVENT_TYPE_COMMIT, event);
     }
   }
 
@@ -153,14 +170,6 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
     //   return queuedValue;
     // }
     return isThere(this.$_trialValue) ? this.$_trialValue : super.getValue(); // $_trialValue is being deprecated
-  }
-
-  getValue() {
-    let value = this.$_pendingValue;
-    if (this.$isValue) {
-      return value;
-    }
-    return this.$_valueWithChildren(value);
   }
 
   /** *************** try/catch, validation ****************** */
@@ -197,10 +206,8 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
       }
     }
 
-    return errors || (this.$isContainer ? this.$childErrors : false);
+    return errors;
   }
-
-  /** *************** event queue ****************** */
 
   /**
    * executes a function, silently stifling errors.
@@ -221,98 +228,29 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
       }
     }
 
-    return error ? error : result;
+    return {
+      error,
+      result
+    };
   }
 
-  /**
-   * either finalized a new next value, or locks in the trial value.
-   * Updates the parent._next value;
-   * note -- passing a new value into $commit IGNORES errors!
-   * @param value
-   */
-  $commit(value = ABSENT) {
-    if (this.isStopped) {
-      throw e('cannot commit value to committed Mirror', {
-        value,
-        target: this
-      });
-    }
-    if (isThere(value)) {
-      super.next(value);
-      this.$event(EVENT_TYPE_COMMIT, value);
-    } else {
-      if (this.$isContainer) {
-        this.$children.forEach((child) => child.$flush());
-      }
-      if (this.$isTrying) {
-        const nextValue = this.getValue();
-        super.next(nextValue);
-        this.$event(EVENT_TYPE_COMMIT, nextValue);
-        this.$_clearTrialValue();
-      }
-    }
-    return this;
-  }
+  /******* introspection *********** */
 
-  /**
-   * reverts or commits the $_trialValue.
-   * @returns {Mirror}
-   */
-  $flush() {
-    if (this.$isContainer) {
-      this.$children.forEach((child) => child.$flush());
-    }
-    if (this.$isTrying) {
-      if (!this.$errors()) {
-        this.$commit();
-      } else {
-        this.$revert();
-      }
-    }
-    return this;
-  }
-
-  /**
-   * removes trial value; happens on commit and revert.
-   */
-  $_clearTrialValue() {
-    this.$_trialValue = undefined;
-  }
-
-  $revert() {
-    this.$event(EVENT_TYPE_REVERT, this.$_trialValue);
-    this.$_clearTrialValue();
-  }
-
-  /******* containers *********** */
-
-  $valueGet(key, value = ABSENT) {
-    if (!this.$isContainer) {
-      return false;
-    }
-    if (!isThere(value)) {
-      value = this.getValue();
+  $get(key, value = ABSENT) {
+    if (this.$hasChild) {
+      return this.$children.get(key).value;
     }
     if (this.$type === TYPE_MAP) {
-      return value.get(key);
+      return this.value.get(key);
     }
-    return value[key];
+    if (!isObj(this.value)) {
+      return undefined;
+    }
+    return this.value[key];
   }
 
   $has(key) {
-    if (!this.$isContainer) {
-      return false;
-    }
-    if (this.$hasChild(key)) {
-      return true;
-    }
-
-    if (this.$type === TYPE_MAP) {
-      return this.value.has(key);
-    }
-    if (this.$type === TYPE_OBJECT) {
-      return key in this.value;
-    }
+    return this.$hasChild(key) || this.$keys.includes(key);
   }
 
   $delete(name) {
@@ -330,7 +268,8 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
           target.$removeChild(name);
         }
       });
-    } else {
+    }
+    else {
       this.$removeChild(name);
     }
   }

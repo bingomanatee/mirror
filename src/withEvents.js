@@ -5,50 +5,49 @@ import {
   ABSENT,
   defaultNextStages,
   defaultStageMap,
-  EVENT_TYPE_ACTION,
+  EVENT_TYPE_ACTION, EVENT_TYPE_COMMIT,
   EVENT_TYPE_MUTATE,
-  EVENT_TYPE_NEXT, STAGE_ERROR,
+  EVENT_TYPE_NEXT, EVENT_TYPE_REVERT, EVENT_TYPE_VALIDATE, STAGE_ERROR,
   STAGE_FINAL,
   STAGE_INIT,
   STAGE_PERFORM,
   STAGE_VALIDATE,
 } from './constants';
 import {
-  e, isArr, isFn, unsub,
+  e, isFn,
 } from './utils';
 import { lazy } from './mirrorMisc';
-import MirrorEvent from './MirrorEvent';
+import MirrorTrans from './MirrorTrans';
 
-export default (BaseClass) => class WithChildren extends BaseClass {
+export default (BaseClass) => class WithEvents extends BaseClass {
   constructor(...args) {
     super(...args);
-    this.$on(
-      EVENT_TYPE_NEXT,
-      (value, p, t) => {
-        t.$_trialValue = value;
-        if (t.$isContainer) {
-          t.$_sendToChildren(value);
+    this.$on(EVENT_TYPE_NEXT, (value, trans) => {
+      this.$_upsertTrans(trans);
+    });
+    this.$on(EVENT_TYPE_VALIDATE, (trans, event, target) => {
+      if (isFn(target.$test)) {
+        let error = null;
+        try {
+          error = target.$test(this.getValue());
+        } catch (err) {
+          error = err;
         }
-      },
-      STAGE_INIT,
-    );
-    this.$on(
-      EVENT_TYPE_NEXT,
-      (value, p, t) => {
-        const errs = t.$errors();
-        if (errs) {
-          t.$revert();
-          p.error(errs);
+        if (error) {
+          target.$_upsertTrans(trans, (draft) => {
+            draft.error = error;
+          });
         }
-      },
-      STAGE_VALIDATE,
-    ); // local validation
+      }
+    });
 
-    this.$on(
-      EVENT_TYPE_NEXT,
-      (value, p, t) => t.$commit(),
-      STAGE_FINAL,
-    );
+    this.$on(EVENT_TYPE_REVERT, (trans, event, target) => {
+      target.$_purgeChangesAfter(trans);
+    });
+
+    this.$on(EVENT_TYPE_COMMIT, (trans, event, target) => {
+      target.$_commitTrans(trans);
+    });
   }
 
   /**
@@ -56,78 +55,15 @@ export default (BaseClass) => class WithChildren extends BaseClass {
    * @returns {Observable}
    */
   get $_eventQueue() {
-    return lazy(this, '$__eventQueue', () => new Subject()
-      .pipe(switchMap((value) => from([value]))));
+    return lazy(this, '$__eventQueue', () => new Subject());
   }
 
-  /**
-   *
-   * @returns {Map}
-   */
-  get $_stages() {
-    return lazy(this, '$__stages', () => new Map(defaultStageMap));
-  }
-
-  /**
-   *
-   * @param type
-   * @param value
-   * @returns {(string)[]}
-   */
-  $_stagesFor(type, value) {
-    if (this.$_stages.has(type)) {
-      return this.$_stages.get(type);
-    }
-
-    return defaultNextStages;
-  }
-
-  $setStages(type, list) {
-    if (!isArr(list)) {
-      throw e('bad input to $setStages', {
-        type,
-        list,
-      });
-    }
-
-    this.$_stages.set(type, list);
-  }
-
-  $event(type, value = ABSENT, onSuccess, onFail, onComplete) {
-    const stages = this.$_stagesFor(type, value);
-    const target = this;
-    const event = new MirrorEvent(value, type, this);
-    event.subscribe({
-      complete() {
-        if (isFn(onComplete)) {
-          target.$_do(onComplete);
-        }
-      },
-      error(err) {
-        event.$stage = STAGE_ERROR;
-        target.$_eventQueue.next(event);
-        if (isFn(onFail)) {
-          target.$_do(onFail, err);
-        }
-        if (isFn(onComplete)) {
-          target.$_do(onComplete, err);
-        }
-      },
+  $event(type, value = ABSENT) {
+    const event = MirrorTrans.make({
+      type,
+      value,
     });
-    for (let i = 0; i < stages.length; ++i) {
-      event.$stage = stages[i];
-      try {
-        this.$_eventQueue.next(event);
-      } catch (err) {
-        console.log('error on next', err);
-      }
-      if (event.isStopped) {
-        break;
-      }
-    }
-    if (!event.isStopped) {
-      event.complete();
-    }
+    this.$_eventQueue.next(event);
     return event;
   }
 
@@ -145,12 +81,12 @@ export default (BaseClass) => class WithChildren extends BaseClass {
     return sub;
   }
 
-  $on($type, handler, $stage = STAGE_PERFORM, $test = ABSENT) {
+  $on(type, handler, $test = ABSENT) {
     const target = this;
     if (!isFn(handler)) {
       throw e('second argument of $on must be function', {
         target: this,
-        type: $type,
+        type,
         handler,
       });
     }
@@ -158,8 +94,7 @@ export default (BaseClass) => class WithChildren extends BaseClass {
     return this.$_eventQueue
       .pipe(
         filter((phase) => (
-          (($type === '*') || (phase.$type === $type))
-          && (($stage === '*') || (phase.$stage === $stage))
+          ((type === '*') || (phase.type === type))
           && ((!isFn($test)) || $test(phase.value, phase, target)))),
       )
       .subscribe({

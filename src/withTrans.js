@@ -18,27 +18,6 @@ import MirrorTrans from './MirrorTrans';
 export default (BaseClass) => (class WithTrans extends BaseClass {
   constructor(...init) {
     super(...init);
-
-    this.$on(EVENT_TYPE_NEXT, (value, p, t) => {
-      const trans = t.$_addTrans({
-        value,
-        type: TRANS_TYPE_CHANGE,
-      });
-      p.$trans = trans;
-      p.subscribe({
-        complete() {
-          t.$_updateTrans(trans, (draft) => {
-            draft.complete();
-          });
-        },
-        error(err) {
-          t.$_updateTrans(trans, (draft) => {
-            draft.error(err);
-          });
-        },
-      });
-    },
-    STAGE_PERFORM);
   }
 
   get $_pending() {
@@ -91,37 +70,10 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
    * Should only be done if all the transactions are complete -- eg, after a $_flushPendingIfDone
    * @param list
    */
-  $_commitTrans(list = ABSENT) {
-    if (!isThere(list)) {
-      return this.$_commitTrans(this.$_pending.value);
-    }
-    const changes = list.filter((trans) => trans.type === TRANS_TYPE_CHANGE);
-    const lastChange = changes.pop();
-    if (lastChange && isThere(lastChange.value)) {
-      super.next(lastChange.value);
-    }
-    this.$_pending.next([]);
+  $_commitTrans(trans = ABSENT) {
+    this.$_purgeChangesAfter(trans);
+    super.next(trans.value);
     return this;
-  }
-
-  /**
-   * $_try needs to be updated -- its not really where it should be
-   * @param value
-   */
-  $_try(value, parent = ABSENT) {
-    if (this.isStopped) {
-      throw e('cannot try value on stopped Mirror', {
-        value,
-        target: this,
-      });
-    }
-    this.$_trialValue = value;
-    this.$_addTrans({
-      value,
-      type: TRANS_TYPE_CHANGE,
-      parent,
-      sharded: !this.$isContainer,
-    });
   }
 
   $_addTrans(def) {
@@ -154,11 +106,8 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
     return null;
   }
 
-  $revertTrans(trans) {
-    if (this.$isContainer) {
-      this.$children.forEach((child) => child.$revertTrans(trans));
-    }
-    const list = this.$_pending.value.filter((aTrans) => aTrans.before(trans));
+  $_purgeChangesAfter(trans) {
+    const list = this.$_pending.value.filter((aTrans) => (aTrans.type !== EVENT_TYPE_NEXT) || aTrans.before(trans));
     this.$_pending.next(list);
   }
 
@@ -172,5 +121,19 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
       }
       throw event.thrownError;
     }
+  }
+
+  getValue() {
+    const lastTrans = this.$_lastPendingTrans;
+    return lastTrans ? lastTrans.value : super.getValue();
+  }
+
+  get $_lastPendingTrans() {
+    const list = [...this.$_pending.value];
+    return list.reverse().reduce((last, trans) => {
+      if (last) return last;
+      if (trans.type === EVENT_TYPE_NEXT) return trans;
+      return last;
+    }, null);
   }
 });
