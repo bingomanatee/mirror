@@ -50,7 +50,7 @@ tap.test(p.name, (suite) => {
       tConst.end();
     });
 
-    suiteTests.test('test (next)', (tTest) => {
+    suiteTests.test('next/validation', (tTest) => {
       const m = new Subject(1, {
         name: 'Testy',
         test: (v) => {
@@ -74,7 +74,14 @@ tap.test(p.name, (suite) => {
       tTest.same(errors.length, 0);
       tTest.same(history, [1, 2]);
 
-      m.next('three');
+      let thrown = null;
+      try {
+        m.next('three');
+      } catch (err) {
+        thrown = err;
+      }
+      tTest.same(thrown.message, NNV);
+
       tTest.same(m.value, 2);
       tTest.same(errors.length, 0);
       tTest.same(history, [1, 2]);
@@ -87,66 +94,6 @@ tap.test(p.name, (suite) => {
       m.complete();
       tTest.end();
     });
-
-    suiteTests.test('test ($try)', (tTest) => {
-      const m = new Subject(1, {
-        name: 'Testy$try',
-        test: (v) => {
-          if (!utils.isNumber(v)) {
-            throw new Error('non-numeric value');
-          }
-        },
-      });
-
-      const [{
-        history,
-        errors,
-      }] = watch(m);
-
-      tTest.same(errors.length, 0);
-      tTest.same(history, [1]);
-      tTest.same(m.value, 1);
-      tTest.notOk(m.$isTrying);
-
-      m.$try(2);
-      tTest.same(m.value, 2);
-      tTest.same(errors.length, 0);
-      tTest.same(history, [1]);
-      tTest.ok(m.$isTrying);
-
-      m.$flush();
-
-      tTest.same(m.value, 2);
-      tTest.same(errors.length, 0);
-      tTest.same(history, [1, 2]);
-      tTest.notOk(m.$isTrying);
-
-      m.$try('three');
-      tTest.same(m.value, 'three');
-      tTest.same(errors.length, 0);
-      tTest.same(history, [1, 2]);
-
-      m.$flush();
-      tTest.same(m.value, 2);
-      tTest.same(errors.length, 0);
-      tTest.same(history, [1, 2]);
-      tTest.notOk(m.$isTrying);
-
-      m.$try(4);
-      tTest.same(m.value, 4);
-      tTest.same(errors.length, 0);
-      tTest.same(history, [1, 2]);
-      tTest.ok(m.$isTrying);
-
-      m.$flush();
-      tTest.same(m.value, 4);
-      tTest.same(errors.length, 0);
-      tTest.same(history, [1, 2, 4]);
-      tTest.notOk(m.$isTrying);
-
-      m.complete();
-      tTest.end();
-    }, { skip: true });
 
     suiteTests.test('events', (ev) => {
       ev.test('events - basic', (ee) => {
@@ -317,8 +264,14 @@ tap.test(p.name, (suite) => {
           y: 0,
         }, {
           children: { z: 0 },
-          name: 'xyz',
+          name: 'basic-xyz',
         });
+
+        const zChild = m.$children.get('z');
+        m.subscribe((v) => console.log('basic-xyz value', v));
+        m.$_pending.subscribe((list) => console.log('basic-xyz pending', JSON.stringify(list)));
+        zChild.subscribe((v) => console.log('zChild value', v));
+        zChild.$_pending.subscribe((list) => console.log('zChild pending', JSON.stringify(list)));
 
         bas.same(m.$type, TYPE_OBJECT);
 
@@ -481,103 +434,6 @@ tap.test(p.name, (suite) => {
 
       mut.end();
     });
-
-    suiteTests.test('actions', (act) => {
-      const m = new Subject({
-        a: 1,
-        b: 2,
-      }, {
-        actions: {
-          double: (mirror) => {
-            mirror.$do.setA(mirror.value.a * 2);
-            mirror.$do.setB(mirror.value.b * 2);
-          },
-
-          scale: (mirror, power) => {
-            mirror.$do.setA(mirror.value.a * power);
-            mirror.$do.setB(mirror.value.b * power);
-          },
-        },
-      });
-
-      const [{ history }] = watch(m);
-
-      const FIRST = {
-        a: 1,
-        b: 2,
-      };
-      act.same(history, [FIRST]);
-
-      m.$do.setA(4);
-
-      const SECOND = {
-        a: 4,
-        b: 2,
-      };
-      act.same(history, [FIRST, SECOND]);
-
-      m.$do.double();
-
-      const THIRD = {
-        a: 8,
-        b: 2,
-      };
-      const FOURTH = {
-        a: 8,
-        b: 4,
-      };
-      act.same(history, [FIRST, SECOND, THIRD, FOURTH]);
-
-      m.$do.scale(0.5);
-
-      const FIFTH = {
-        a: 4,
-        b: 4,
-      };
-      act.same(history, [FIRST, SECOND, THIRD, FOURTH, FIFTH, SECOND]);
-
-      act.end();
-    });
-
-    suiteTests.test('trans', (tr) => {
-      tr.test('setAction', (trs) => {
-        const m = new Subject({
-          a: 1,
-          b: 2,
-        });
-        const [{ trans }] = watch(m);
-        trs.same(trans, [[]]);
-        m.$do.setA(4);
-        trs.same(trans.length, 3);
-        const summary = trans.map((list) => list.map(({ state, type, value }) => ({
-          state,
-          type,
-          value,
-        })));
-        trs.same(summary, [
-          [],
-          [{
-            type: TRANS_TYPE_CHANGE,
-            value: {
-              a: 4,
-              b: 2,
-            },
-            state: TRANS_STATE_NEW,
-          }],
-          [{
-            type: TRANS_TYPE_CHANGE,
-            value: {
-              a: 4,
-              b: 2,
-            },
-            state: TRANS_STATE_COMPLETE,
-          }],
-        ]);
-        trs.end();
-      });
-      tr.end();
-    });
-
     suiteTests.end();
   });
 

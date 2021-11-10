@@ -75,10 +75,10 @@ export default (BaseClass) => class WithChildren extends BaseClass {
     if (this.$isContainer) {
       const valueMap = toMap(value);
       valueMap.forEach((childValue, key) => {
-        if (this.$children.has(key)) {
+        if (this.$children.has(key) && (this.$children.get(key).value !== childValue)) {
           this.$children.get(key).$_try(childValue);
         }
-      })
+      });
     }
   }
 
@@ -91,9 +91,14 @@ export default (BaseClass) => class WithChildren extends BaseClass {
     if (!isThere(value)) {
       value = this.$current;
     }
+    // if (this.$name === 'basic-xyz') {
+    //   const z = this.$children.get('z');
+    //   console.log('$_valueWithChildren -- child z:', z._value, 'pending', z.$_pending.value,
+    //     'trial', z.$_trialValue);
+    // }
 
     const target = this;
-    return produce(value, (draft) => {
+    const out = produce(value, (draft) => {
       target.$children.forEach((childMirror, name) => {
         switch (target.$type) {
           case TYPE_MAP:
@@ -106,6 +111,12 @@ export default (BaseClass) => class WithChildren extends BaseClass {
         }
       });
     });
+
+    // if (this.$name === 'basic-xyz') {
+    //   console.log('... value = ', out);
+    // }
+
+    return out;
   }
 
   $hasChild(name) {
@@ -129,5 +140,56 @@ export default (BaseClass) => class WithChildren extends BaseClass {
         }
       }
     }
+  }
+
+  $set(name, value) {
+    if (!this.$isContainer) {
+      throw e('cannot set to non-container', {
+        name,
+        value,
+        target: this,
+      });
+    }
+
+    let nextValue;
+    if (this.$type === TYPE_MAP) {
+      if (!this.value.has(name)) {
+        throw e('cannot set unkeyed value ', { target: this, name, value });
+      }
+      nextValue = produce(this.value, (draft) => {
+        draft.set(name, value);
+      });
+    }
+
+    if (this.$type === TYPE_OBJECT) {
+      if (!(name in this.value)) {
+        throw e('cannot set unkeyed value ', { target: this, name, value });
+      }
+      nextValue = produce(this.value, (draft) => {
+        draft[name] = value;
+      });
+    }
+
+    return this.next(nextValue);
+  }
+
+  /**
+   * returns an array of aliases to $set for a key.
+   * note - doesn't check for existence of keys -- that is the job of $set;
+   * @param key
+   * @returns {*}
+   */
+  $_setFor(key) {
+    lazy(this, '$__setFor', () => {
+      const sets = new Map();
+      this.$keys.forEach((key) => {
+        sets.set(key, (value) => this.$set(key, value));
+      });
+      return sets;
+    });
+    if (!this.$__setFor.has(key)) {
+      this.$__setFor.set(key, (value) => this.$set(key, value));
+    }
+    return this.$__setFor.get(key);
   }
 };

@@ -44,11 +44,11 @@ export default (BaseClass) => class WithChildren extends BaseClass {
       STAGE_VALIDATE,
     ); // local validation
 
-    this.$on(
-      EVENT_TYPE_NEXT,
-      (value, p, t) => t.$commit(),
-      STAGE_FINAL,
-    );
+    // this.$on(
+    //   EVENT_TYPE_NEXT,
+    //   (value, p, t) => t.$commit(),
+    //   STAGE_FINAL,
+    // );
   }
 
   /**
@@ -108,9 +108,6 @@ export default (BaseClass) => class WithChildren extends BaseClass {
         target.$_eventQueue.next(event);
         if (isFn(onFail)) {
           target.$_do(onFail, err);
-        }
-        if (isFn(onComplete)) {
-          target.$_do(onComplete, err);
         }
       },
     });

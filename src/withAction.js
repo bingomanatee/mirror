@@ -36,10 +36,14 @@ export default (BaseClass) => class WithAction extends BaseClass {
       } else {
         try {
           t.$_actions.get(name)(t, ...args);
-          p.$trans.complete();
+          t.$_upsertTrans(p.$trans, (draft) => {
+            draft.complete();
+          });
         } catch (err) {
+          t.$_upsertTrans(p.$trans, (draft) => {
+            draft.error();
+          });
           p.error(err);
-          p.$trans.error(err);
         }
       }
     },
@@ -161,34 +165,6 @@ export default (BaseClass) => class WithAction extends BaseClass {
       this.$revertTrans(event.$trans);
       throw event.thrownError;
     }
-    return event;
-  }
-
-  $set(name, value) {
-    if (!this.$isContainer) {
-      throw e('cannot set to non-container', {
-        name,
-        value,
-        target: this,
-      });
-    }
-    let event;
-    if (this.$hasChild(name)) {
-      event = this.$children.get(name)
-        .set(value);
-    }
-    if (this.$type === TYPE_MAP) {
-      event = this.$mutate((draft) => {
-        draft.set(name, value);
-      });
-    }
-    if (this.$type === TYPE_OBJECT) {
-      event = this.$mutate((draft) => {
-        draft[name] = value;
-      });
-    }
-
-    this.$postEvent(event);
     return event;
   }
 };

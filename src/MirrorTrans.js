@@ -10,23 +10,12 @@ const hyper = hyperid();
 let order = 0;
 export default class MirrorTrans {
   constructor({
-    name = ABSENT,
-    creator = ABSENT,
-    parent = ABSENT,
     type = TRANS_TYPE_CHANGE,
-    args = [],
     value = ABSENT,
   }) {
-    this.name = name;
-    this.args = args;
-    this.creator = creator;
-    this.parent = parent;
     this.type = type;
     this.value = value;
-
     this.state = TRANS_STATE_NEW;
-    this.sharded = false;
-    this.validated = false;
   }
 
   complete() {

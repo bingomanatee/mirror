@@ -106,7 +106,7 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
     return this.$type === TYPE_VALUE;
   }
 
-  $keys() {
+  get $keys() {
     const childKeys = this.$_children ? Array.from(this.$children.keys()) : [];
     let valueKeys = [];
     if (this.$type === TYPE_MAP) {
@@ -133,11 +133,17 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
     if (!this.$_constructed) {
       // do not validate first value; accept it no matter what
       super.next(nextValue);
-    } else {
+    }
+    else {
       const event = this.$event(EVENT_TYPE_NEXT, nextValue);
       if (event.hasError) {
-
+        if (event.$trans) {
+          this.$_revertTrans(event.$trans);
+        }
+        throw event.thrownError;
       }
+      delete this.$_trialValue;
+
       return event;
     }
   }
@@ -240,7 +246,8 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
     if (isThere(value)) {
       super.next(value);
       this.$event(EVENT_TYPE_COMMIT, value);
-    } else {
+    }
+    else {
       if (this.$isContainer) {
         this.$children.forEach((child) => child.$flush());
       }
@@ -265,7 +272,8 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
     if (this.$isTrying) {
       if (!this.$errors()) {
         this.$commit();
-      } else {
+      }
+      else {
         this.$revert();
       }
     }
@@ -280,7 +288,7 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
   }
 
   $revert() {
-    this.$event(EVENT_TYPE_REVERT, this.$_trialValue);
+    // this.$event(EVENT_TYPE_REVERT, this.$_trialValue);
     this.$_clearTrialValue();
   }
 
@@ -300,13 +308,9 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
   }
 
   $has(key) {
-    if (!this.$isContainer) {
-      return false;
-    }
     if (this.$hasChild(key)) {
       return true;
     }
-
     if (this.$type === TYPE_MAP) {
       return this.value.has(key);
     }
@@ -330,7 +334,8 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
           target.$removeChild(name);
         }
       });
-    } else {
+    }
+    else {
       this.$removeChild(name);
     }
   }

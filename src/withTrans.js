@@ -4,9 +4,9 @@ import { BehaviorSubject } from 'rxjs';
 import {
   ABSENT,
   EVENT_TYPE_ACTION,
-  EVENT_TYPE_NEXT,
+  EVENT_TYPE_NEXT, STAGE_ERROR,
   STAGE_INIT,
-  STAGE_PERFORM,
+  STAGE_PERFORM, STAGE_POST,
   TRANS_STATE_COMPLETE, TRANS_STATE_ERROR,
   TRANS_TYPE_ACTION,
   TRANS_TYPE_CHANGE,
@@ -20,25 +20,30 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
     super(...init);
 
     this.$on(EVENT_TYPE_NEXT, (value, p, t) => {
-      const trans = t.$_addTrans({
+      p.$trans = t.$_addTrans({
         value,
         type: TRANS_TYPE_CHANGE,
       });
-      p.$trans = trans;
-      p.subscribe({
-        complete() {
-          t.$_updateTrans(trans, (draft) => {
-            draft.complete();
-          });
-        },
-        error(err) {
-          t.$_updateTrans(trans, (draft) => {
-            draft.error(err);
-          });
-        },
-      });
     },
-    STAGE_PERFORM);
+    STAGE_INIT);
+
+    this.$on(EVENT_TYPE_NEXT, (value, p, t) => {
+      if (p.$trans) {
+        t.$revertTrans(p.$trans);
+      }
+    },
+    STAGE_ERROR);
+
+    this.$on(EVENT_TYPE_NEXT, (value, p, t) => {
+      if (p.$trans) {
+        t.$_updateTrans(p.$trans, (draft) => {
+          draft.complete();
+        }, t.$name === 'tvalidate' ? `completing trans for value ${JSON.stringify(value)}` : false);
+        t.$_flushChildAfter()
+        t.$_flushPendingIfDone();
+      }
+    },
+    STAGE_POST);
   }
 
   get $_pending() {
@@ -154,9 +159,9 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
     return null;
   }
 
-  $revertTrans(trans) {
+  $_revertTrans(trans) {
     if (this.$isContainer) {
-      this.$children.forEach((child) => child.$revertTrans(trans));
+      this.$children.forEach((child) => child.$_revertTrans(trans));
     }
     const list = this.$_pending.value.filter((aTrans) => aTrans.before(trans));
     this.$_pending.next(list);

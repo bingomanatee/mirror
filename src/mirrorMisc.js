@@ -138,7 +138,7 @@ export function makeDoProxy(mirror) {
             const setName = SET_RE.exec(prop)[1];
             const keyFor = target.$keyFor(setName);
             if (keyFor) {
-              return (value) => target.$set(keyFor, value);
+              return target.$_setFor(keyFor);
             }
           }
         }
@@ -156,7 +156,7 @@ export function makeDoObj(target) {
   });
   if (this.$isContainer) {
     this.$keys.forEach((name) => {
-      doObj[`set${ucFirst(name)}`] = (...args) => target.$event(EVENT_TYPE_ACTION, { name, args });
+      doObj[`set${ucFirst(name)}`] = (...args) => target.$set(name, ...args);
     });
   }
   return doObj;
