@@ -10,20 +10,11 @@ const lib = require('../lib');
 
 const {
   TYPE_VALUE,
-  TYPE_OBJECT,
-  STAGE_INIT,
-  STAGE_VALIDATE,
-  STAGE_PERFORM,
-  STAGE_POST,
-  STAGE_FINAL,
-  STAGE_ERROR,
-  TRANS_STATE_NEW,
-  TRANS_STATE_COMPLETE,
-  TRANS_STATE_ERROR,
-  TRANS_TYPE_CHANGE,
-  TRANS_TYPE_ACTION,
   utils,
+  idGen,
 } = lib;
+
+idGen.enqueue('a,b,c,d,e,f,g,h,i,j'.split(','));
 
 const NNV = 'non-numeric value';
 
@@ -89,19 +80,13 @@ tap.test(p.name, (suite) => {
           },
           {
             type: 'event:validate',
-            value: {
-              type: 'next',
-              value: 5,
-            },
+            value: 'a',
           },
           { pending: [] },
           { currentValue: 5 },
           {
             type: 'event:commit',
-            value: {
-              type: 'next',
-              value: 5,
-            },
+            value: 'a',
           }]);
       tNext.end();
     });
@@ -128,99 +113,61 @@ tap.test(p.name, (suite) => {
         console.log('thrown error from bad next:', err);
         error = err;
       }
-      tNext.same(error, NNV);
+      tNext.same(error, [NNV]);
       tNext.same(m.value, 5);
 
       m.next(10);
 
-      console.log('queue:', JSON.stringify(queue));
       tNext.same(m.value, 10);
       tNext.same(queue,
-        [{ pending: [] },
-          { currentValue: 4 },
-          {
-            pending: [{
-              type: 'next',
-              value: 5,
-            }],
-          },
-          {
+        [{ pending: [] }, { currentValue: 4 }, {
+          pending: [{
             type: 'next',
             value: 5,
-          },
-          {
-            type: 'event:validate',
-            value: {
-              type: 'next',
-              value: 5,
-            },
-          },
-          { pending: [] },
-          { currentValue: 5 },
-          {
-            type: 'event:commit',
-            value: {
-              type: 'next',
-              value: 5,
-            },
-          },
-          {
-            pending: [{
-              type: 'next',
-              value: 'six',
-            }],
-          },
-          {
+          }],
+        }, {
+          type: 'next',
+          value: 5,
+        }, {
+          type: 'event:validate',
+          value: 'd',
+        }, { pending: [] }, { currentValue: 5 }, {
+          type: 'event:commit',
+          value: 'd',
+        }, {
+          pending: [{
             type: 'next',
             value: 'six',
-          },
-          {
-            pending: [{
-              type: 'next',
-              value: 'six',
-            }],
-          },
-          {
-            type: 'event:validate',
-            value: {
-              type: 'next',
-              value: 'six',
-            },
-          },
-          { pending: [] },
-          {
-            type: 'event:revert',
-            value: {
-              type: 'next',
-              value: 'six',
-            },
-          },
-          {
-            pending: [{
-              type: 'next',
-              value: 10,
-            }],
-          },
-          {
+          }],
+        }, {
+          type: 'next',
+          value: 'six',
+        }, {
+          pending: [{
+            type: 'next',
+            value: 'six',
+          }],
+        }, {
+          type: 'event:validate',
+          value: 'g',
+        }, { pending: [] }, {
+          type: 'event:revert',
+          value: 'g',
+        }, {
+          pending: [{
             type: 'next',
             value: 10,
-          },
-          {
-            type: 'event:validate',
-            value: {
-              type: 'next',
-              value: 10,
-            },
-          },
-          { pending: [] },
-          { currentValue: 10 },
-          {
-            type: 'event:commit',
-            value: {
-              type: 'next',
-              value: 10,
-            },
-          }]);
+          }],
+        }, {
+          type: 'next',
+          value: 10,
+        }, {
+          type: 'event:validate',
+          value: 'j',
+        }, { pending: [] }, { currentValue: 10 }, {
+          type: 'event:commit',
+          value: 'j',
+        }]);
       tNext.end();
     });
 

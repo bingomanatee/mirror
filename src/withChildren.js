@@ -1,12 +1,65 @@
 import produce from 'immer';
 import { lazy } from './mirrorMisc';
 import {
-  ABSENT, EVENT_TYPE_CHILD_ADDED, TYPE_MAP, TYPE_OBJECT, TYPE_VALUE,
+  ABSENT,
+  EVENT_TYPE_CHILD_ADDED, EVENT_TYPE_COMMIT, EVENT_TYPE_COMMIT_CHILDREN,
+  EVENT_TYPE_NEXT, EVENT_TYPE_REVERT,
+  EVENT_TYPE_SHARD,
+  EVENT_TYPE_VALIDATE,
+  TYPE_MAP,
+  TYPE_OBJECT,
+  TYPE_VALUE,
 } from './constants';
-import { e, isThere, toMap } from './utils';
-import newMirror from './newMirror';
+import {
+  e, isThere, toMap, uniq,
+} from './utils';
+import { newMirror } from './newMirror';
 
 export default (BaseClass) => class WithChildren extends BaseClass {
+  constructor(...args) {
+    super(...args);
+    this.$on(EVENT_TYPE_SHARD, (id, event, target) => {
+      const trans = target.$_getTrans(id);
+      const mapped = toMap(trans.value);
+      mapped.forEach((childValue, key) => {
+        if (target.$hasChild(key)) {
+          const child = target.$children.get(key);
+          child.$event(EVENT_TYPE_NEXT, childValue, { parent: trans.id });
+        }
+      });
+    });
+
+    this.$on(EVENT_TYPE_VALIDATE, (id, event, target) => {
+      const trans = target.$_getTrans(id);
+      if (trans.$isContainer) {
+        let childErrors = [];
+        target.$children.forEach((child) => {
+          const shardTrans = child.$_getTransForParent(trans.id);
+          const errors = child.$errors(shardTrans.value);
+          childErrors = [...childErrors, ...errors];
+        });
+        target.$_addErrorsToTrans(trans, childErrors);
+      }
+    });
+
+    this.$on(EVENT_TYPE_REVERT, (id, event, target) => {
+      if (target.$isContainer) {
+        target.$children.forEach((child) => {
+          child.$_purgeChangesAfter(id);
+        });
+      }
+    });
+
+    this.$on(EVENT_TYPE_COMMIT_CHILDREN, (id, event, target) => {
+      target.$children.forEach((child) => {
+        const trans = target.$_getTransForParent(id);
+        if (trans) {
+          child.$event(EVENT_TYPE_COMMIT, trans.id);
+        }
+      });
+    });
+  }
+
   get $children() {
     return lazy(this, '$_children', () => new Map());
   }
@@ -76,9 +129,10 @@ export default (BaseClass) => class WithChildren extends BaseClass {
       const valueMap = toMap(value);
       valueMap.forEach((childValue, key) => {
         if (this.$children.has(key)) {
-          this.$children.get(key).$_try(childValue);
+          this.$children.get(key)
+            .$_try(childValue);
         }
-      })
+      });
     }
   }
 

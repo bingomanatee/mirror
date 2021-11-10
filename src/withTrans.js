@@ -1,12 +1,11 @@
 /* eslint-disable camelcase */
 import produce from 'immer';
 import { BehaviorSubject } from 'rxjs';
+import uniq from 'lodash/uniq';
 import {
   ABSENT,
   EVENT_TYPE_ACTION,
   EVENT_TYPE_NEXT,
-  STAGE_INIT,
-  STAGE_PERFORM,
   TRANS_STATE_COMPLETE, TRANS_STATE_ERROR,
   TRANS_TYPE_ACTION,
   TRANS_TYPE_CHANGE,
@@ -21,10 +20,7 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
   }
 
   get $_pending() {
-    return lazy(this, '$__pending', () => {
-      const pending = new BehaviorSubject([]);
-      return pending;
-    });
+    return lazy(this, '$__pending', () => new BehaviorSubject([]));
   }
 
   $_upsertTrans(item) {
@@ -65,12 +61,11 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
   }
 
   /**
-   * commits the most recent value changes;
-   * and empties the $_pending queue of all entries.
-   * Should only be done if all the transactions are complete -- eg, after a $_flushPendingIfDone
-   * @param list
+   * commits a transaction's value to the mirror.
+   * @param trans MirrorTrans
    */
-  $_commitTrans(trans = ABSENT) {
+  $_commitTrans(id) {
+    const trans = this.$_getTrans(id);
     this.$_purgeChangesAfter(trans);
     super.next(trans.value);
     return this;
@@ -88,6 +83,25 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
     return trans;
   }
 
+  $_getTrans(matchTo) {
+    return this.$_pending.value.find((trans) => trans.matches(matchTo));
+  }
+
+  $_getTransForParent(parentId) {
+    return this.$_pending.value.find((trans) => trans.parent === parentId);
+  }
+
+  $_addErrorsToTrans(matchTo, errors) {
+    const uinqErrors = uniq(errors)
+      .filter((e) => e);
+    if (uinqErrors.length > 0) {
+      this.$_updateTrans(matchTo, (draft) => {
+        draft.errors = uniq([...draft.errors, ...uinqErrors])
+          .filter((e) => e);
+      });
+    }
+  }
+
   /**
    * updates an existing transaction with a mutator function
    * @param matchTo {int|MirrorTrans} the original transaction (or its ID)
@@ -95,7 +109,7 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
    * @returns {null|MirrorTrans}
    */
   $_updateTrans(matchTo, fn) {
-    const matched = this.$_pending.value.find((trans) => trans.matches(matchTo));
+    const matched = this.$_getTrans(matchTo);
     if (matched) {
       const nextTrans = produce(matched, fn);
       this.$_upsertTrans(nextTrans);
@@ -106,7 +120,8 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
     return null;
   }
 
-  $_purgeChangesAfter(trans) {
+  $_purgeChangesAfter(id) {
+    const trans = this.$_getTrans(id);
     const list = this.$_pending.value.filter((aTrans) => (aTrans.type !== EVENT_TYPE_NEXT) || aTrans.before(trans));
     this.$_pending.next(list);
   }
@@ -130,10 +145,15 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
 
   get $_lastPendingTrans() {
     const list = [...this.$_pending.value];
-    return list.reverse().reduce((last, trans) => {
-      if (last) return last;
-      if (trans.type === EVENT_TYPE_NEXT) return trans;
-      return last;
-    }, null);
+    return list.reverse()
+      .reduce((last, trans) => {
+        if (last) {
+          return last;
+        }
+        if (trans.type === EVENT_TYPE_NEXT) {
+          return trans;
+        }
+        return last;
+      }, null);
   }
 });

@@ -1,4 +1,7 @@
 import { isDraftable, produce } from 'immer';
+import isEqual from 'lodash/isEqual';
+import uniq from 'lodash/uniq';
+import lGet from 'lodash/get';
 import { ABSENT, NAME_UNNAMED } from './constants';
 
 const isNumberLodash = require('lodash/isNumber');
@@ -172,3 +175,9 @@ export function mapFromKeys(target, keyMap) {
 
   return out;
 }
+
+export {
+  lGet,
+  uniq,
+  isEqual,
+};

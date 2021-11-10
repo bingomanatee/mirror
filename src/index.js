@@ -2,8 +2,11 @@ import Mirror from './Mirror';
 import * as constants from './constants';
 import * as utils from './utils';
 import mirrorWatcher from './mirrorWatcherUtil';
-import MirrorEvent from './MirrorEvent';
+import MirrorTrans from './MirrorTrans';
+import { setMirrorClass } from './newMirror';
+import * as idGen from './idGen';
 
+setMirrorClass(Mirror);
 export default {
-  ...constants, utils, Mirror, mirrorWatcher, Event: MirrorEvent,
+  ...constants, ...idGen, idGen, utils, Mirror, mirrorWatcher, MirrorTrans,
 };

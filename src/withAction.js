@@ -3,9 +3,6 @@ import { e, isFn, isStr } from './utils';
 import {
   EVENT_TYPE_ACTION,
   EVENT_TYPE_MUTATE,
-  STAGE_FINAL,
-  STAGE_INIT,
-  STAGE_PERFORM,
   TRANS_TYPE_ACTION,
   TYPE_MAP,
   TYPE_OBJECT,
@@ -25,8 +22,7 @@ export default (BaseClass) => class WithAction extends BaseClass {
         name,
         args,
       });
-    },
-    STAGE_INIT);
+    });
     this.$on(EVENT_TYPE_ACTION, ({
       name,
       args,
@@ -42,8 +38,7 @@ export default (BaseClass) => class WithAction extends BaseClass {
           p.$trans.error(err);
         }
       }
-    },
-    STAGE_PERFORM);
+    });
 
     this.$on(
       EVENT_TYPE_MUTATE,
@@ -62,7 +57,6 @@ export default (BaseClass) => class WithAction extends BaseClass {
           p.error(err);
         }
       },
-      STAGE_PERFORM,
     );
 
     this.$on(
@@ -84,7 +78,6 @@ export default (BaseClass) => class WithAction extends BaseClass {
           });
         }
       },
-      STAGE_FINAL,
     );
   }
 

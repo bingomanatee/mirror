@@ -3,34 +3,19 @@
 
 import { BehaviorSubject, combineLatest, combineLatestWith, distinct, from, of, Subject } from 'rxjs';
 import produce, { enableMapSet, isDraft } from 'immer';
-import isEqual from 'lodash/isEqual';
-import uniq from 'lodash/uniq';
-
+import {lGet, isEqual, uniq} from './utils';
 enableMapSet();
 import {
   ABSENT,
-  EVENT_TYPE_CHILD_ADDED,
   EVENT_TYPE_COMMIT,
   EVENT_TYPE_NEXT,
   EVENT_TYPE_REVERT,
   NAME_UNNAMED,
-  STAGE_ERROR,
-  STAGE_FINAL,
-  STAGE_INIT,
-  STAGE_PERFORM,
-  STAGE_POST,
-  STAGE_VALIDATE,
   TYPE_MAP,
   TYPE_OBJECT,
   TYPE_VALUE,
-  defaultStageMap,
-  defaultNextStages,
-  EVENT_TYPE_MUTATE,
-  EVENT_TYPE_ACTION,
-  SET_RE,
-  TRANS_TYPE_CHANGE,
-  EVENT_TYPE_TRY,
-  EVENT_TYPE_VALIDATE
+  EVENT_TYPE_VALIDATE,
+  EVENT_TYPE_SHARD, EVENT_TYPE_COMMIT_CHILDREN
 } from './constants';
 import {
   toMap, toObj, isMap, isObj, noop, maybeImmer, e, isFn, isThere, isArr, isStr, unsub, ucFirst, strip, mapFromKeys
@@ -47,7 +32,7 @@ import MirrorTrans from './MirrorTrans';
  * which, when updated, update the parent.
  * This allows for field level validation, transactional updates and all sorts of other goodies.
  */
-export default class Mirror extends ((withEvents(withTrans(BehaviorSubject)))) {
+export default class Mirror extends (withChildren(withEvents(withTrans(BehaviorSubject)))) {
   constructor(value, config = ABSENT) {
     super(value);
     this.$configure(config);
@@ -84,7 +69,7 @@ export default class Mirror extends ((withEvents(withTrans(BehaviorSubject)))) {
     }
 
     if (isThere(test)) {
-      this.$_test = test;
+      this.$test = test;
     }
 
     if (isThere(type)) {
@@ -130,7 +115,7 @@ export default class Mirror extends ((withEvents(withTrans(BehaviorSubject)))) {
 
   /** *************** Subject handlers ****************** */
   get $currentValue() {
-    return this.$_has_pending? this.$_last_pending.value : this._value;
+    return this.$_has_pending ? this.$_last_pending.value : this._value;
   }
 
   /**
@@ -144,69 +129,42 @@ export default class Mirror extends ((withEvents(withTrans(BehaviorSubject)))) {
       super.next(nextValue);
     }
     else {
-      const event = this.$event(EVENT_TYPE_NEXT, nextValue);
-      try {
-        this.$event(EVENT_TYPE_VALIDATE, event);
-      } catch (err) {
-        console.log('validation error: ', err);
+      const {id} = this.$event(EVENT_TYPE_NEXT, nextValue);
+      if (this.$isContainer) {
+        this.$event(EVENT_TYPE_SHARD, id);
       }
-      if (!this.$isValid()) {
-        const errors = this.$errors();
-        this.$event(EVENT_TYPE_REVERT, event);
-        throw errors;
-      }
-      this.$event(EVENT_TYPE_COMMIT, event);
-    }
-  }
 
-  /**
-   * returns the value that is queued to replace the current value.
-   * If there is no pending value, returns the actual current value.
-   * @returns {*}
-   */
-  get $_pendingValue() {
-    // let queuedValue = this.$_lastQueuedValue;
-    // if (queuedValue !== ABSENT) {
-    //   return queuedValue;
-    // }
-    return isThere(this.$_trialValue) ? this.$_trialValue : super.getValue(); // $_trialValue is being deprecated
+      this.$event(EVENT_TYPE_VALIDATE, id);
+      const currentTrans = this.$_getTrans(id);
+      if (lGet(currentTrans, 'errors.length', 0) > 0) {
+        this.$event(EVENT_TYPE_REVERT, id);
+        throw currentTrans.errors;
+      }
+      if (this.$isContainer) {
+        this.$event(EVENT_TYPE_COMMIT_CHILDREN, id);
+      }
+      this.$event(EVENT_TYPE_COMMIT, id);
+    }
   }
 
   /** *************** try/catch, validation ****************** */
-
-  get $isTrying() {
-    return isThere(this.$_trialValue);
-  }
-
-  /**
-   *
-   * @returns {undefined|function}
-   */
-  get $test() {
-    return isFn(this.$_test) ? this.$_test : undefined;
-  }
-
-  $isValid(candidate = ABSENT) {
-    if (!isThere(candidate)) {
-      candidate = this.getValue();
-    }
-    return !this.$errors(candidate);
-  }
 
   $errors(candidate = ABSENT) {
     if (!isThere(candidate)) {
       candidate = this.getValue();
     }
-    let errors = false;
+    let error;
     if (isFn(this.$test)) {
       try {
-        errors = this.$test(candidate);
+        error = this.$test(candidate);
       } catch (err) {
-        errors = err;
+        error = err;
       }
     }
-
-    return errors;
+    if (error) {
+      return [error];
+    }
+    return [];
   }
 
   /**

@@ -1,5 +1,9 @@
-import Mirror from './Mirror';
+let Mirror = null;
 
-export default function newMirror(...args) {
+export function setMirrorClass(MirrorClass) {
+  Mirror = MirrorClass;
+}
+
+export function newMirror(...args) {
   return new Mirror(...args);
 }

@@ -1,17 +1,10 @@
-import produce from 'immer';
-import { from, Subject } from 'rxjs';
-import { filter, switchMap } from 'rxjs/operators';
+import { Subject } from 'rxjs';
+import { filter } from 'rxjs/operators';
+import uniq from 'lodash/uniq';
+
 import {
-  ABSENT,
-  defaultNextStages,
-  defaultStageMap,
-  EVENT_TYPE_ACTION, EVENT_TYPE_COMMIT,
-  EVENT_TYPE_MUTATE,
-  EVENT_TYPE_NEXT, EVENT_TYPE_REVERT, EVENT_TYPE_VALIDATE, STAGE_ERROR,
-  STAGE_FINAL,
-  STAGE_INIT,
-  STAGE_PERFORM,
-  STAGE_VALIDATE,
+  ABSENT, EVENT_TYPE_COMMIT,
+  EVENT_TYPE_NEXT, EVENT_TYPE_REVERT, EVENT_TYPE_VALIDATE,
 } from './constants';
 import {
   e, isFn,
@@ -25,28 +18,25 @@ export default (BaseClass) => class WithEvents extends BaseClass {
     this.$on(EVENT_TYPE_NEXT, (value, trans) => {
       this.$_upsertTrans(trans);
     });
+
     this.$on(EVENT_TYPE_VALIDATE, (trans, event, target) => {
       if (isFn(target.$test)) {
-        let error = null;
+        let errors = [];
         try {
-          error = target.$test(this.getValue());
+          errors = target.$errors();
         } catch (err) {
-          error = err;
+          errors = [err];
         }
-        if (error) {
-          target.$_upsertTrans(trans, (draft) => {
-            draft.error = error;
-          });
-        }
+        target.$_addErrorsToTrans(trans, errors);
       }
     });
 
-    this.$on(EVENT_TYPE_REVERT, (trans, event, target) => {
-      target.$_purgeChangesAfter(trans);
+    this.$on(EVENT_TYPE_REVERT, (id, event, target) => {
+      target.$_purgeChangesAfter(id);
     });
 
-    this.$on(EVENT_TYPE_COMMIT, (trans, event, target) => {
-      target.$_commitTrans(trans);
+    this.$on(EVENT_TYPE_COMMIT, (id, event, target) => {
+      target.$_commitTrans(id);
     });
   }
 
@@ -58,10 +48,11 @@ export default (BaseClass) => class WithEvents extends BaseClass {
     return lazy(this, '$__eventQueue', () => new Subject());
   }
 
-  $event(type, value = ABSENT) {
+  $event(type, value = ABSENT, config = {}) {
     const event = MirrorTrans.make({
       type,
       value,
+      ...config,
     });
     this.$_eventQueue.next(event);
     return event;
@@ -81,7 +72,7 @@ export default (BaseClass) => class WithEvents extends BaseClass {
     return sub;
   }
 
-  $on(type, handler, $test = ABSENT) {
+  $on(type, handler, $test = ABSENT, onErr = ABSENT) {
     const target = this;
     if (!isFn(handler)) {
       throw e('second argument of $on must be function', {
@@ -99,14 +90,18 @@ export default (BaseClass) => class WithEvents extends BaseClass {
       )
       .subscribe({
         error(err) {
-          console.log('$on error:', err);
+          if (isFn(onErr)) {
+            onErr(err);
+          } else {
+            console.warn('$on error:', err, '; handler:', handler);
+          }
         },
         next(phase) {
           try {
             handler(phase.value, phase, target);
           } catch (err) {
-            if (!phase.isStopped) {
-              phase.error(err);
+            if (isFn(onErr)) {
+              onErr(err);
             }
           }
         },
