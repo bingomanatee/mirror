@@ -15,23 +15,7 @@ const {
   idGen,
 } = lib;
 
-idGen.enqueue('a,b,c,d,e,f,g,h,i,j'.split(','));
-
 const NNV = 'non-numeric value';
-
-function reducePending(trans) {
-  const { value, type } = trans;
-  if (utils.isObj(value) && ('order' in value)) {
-    return {
-      type,
-      value: reducePending(value),
-    };
-  }
-  return {
-    type,
-    value,
-  };
-}
 
 const Subject = lib[subjectName];
 tap.test(p.name, (suite) => {
@@ -55,7 +39,7 @@ tap.test(p.name, (suite) => {
     });
 
     suiteTests.test('next - trans', (tNext) => {
-      const m = new Subject(4);
+      const m = new Subject(4, { transQueue: 'abcdefghijklmnopqrstuvwxyz'.split('') });
       const { queue } = transWatch(m);
 
       m.next(5);
@@ -64,20 +48,23 @@ tap.test(p.name, (suite) => {
       // console.log('queue:', JSON.stringify(queue));
       tNext.same(queue,
         [{ pending: [] }, { currentValue: 4 }, {
+          type: 'next',
+          value: 5,
+        }, {
           pending: [{
             type: 'next',
             value: 5,
           }],
         }, {
-          type: 'next',
-          value: 5,
-        }, {
           type: 'event:validate',
           value: 'a',
-        }, { pending: [] }, { currentValue: 5 }, {
+        }, {
           type: 'event:commit',
           value: 'a',
-        }]);
+        }, {
+          type: 'event:flushAfter',
+          value: 0,
+        }, { pending: [] }, { currentValue: 5 }]);
       tNext.end();
     });
 
@@ -88,6 +75,7 @@ tap.test(p.name, (suite) => {
             return NNV;
           }
         },
+        transQueue: 'abcdefghijklmnopqrstuvwxyz'.split(''),
       });
       const { queue } = transWatch(m);
 
@@ -103,28 +91,26 @@ tap.test(p.name, (suite) => {
       m.next(10);
 
       tNext.same(m.value, 10);
-      //  console.log('queue after 10', JSON.stringify(queue));
+      // console.log('queue after 10', JSON.stringify(queue));
       tNext.same(queue,
         [{ pending: [] }, { currentValue: 4 }, {
+          type: 'next',
+          value: 5,
+        }, {
           pending: [{
             type: 'next',
             value: 5,
           }],
         }, {
-          type: 'next',
-          value: 5,
-        }, {
           type: 'event:validate',
-          value: 'd',
-        }, { pending: [] }, { currentValue: 5 }, {
+          value: 'a',
+        }, {
           type: 'event:commit',
-          value: 'd',
+          value: 'a',
         }, {
-          pending: [{
-            type: 'next',
-            value: 'six',
-          }],
-        }, {
+          type: 'event:flushAfter',
+          value: 0,
+        }, { pending: [] }, { currentValue: 5 }, {
           type: 'next',
           value: 'six',
         }, {
@@ -134,30 +120,34 @@ tap.test(p.name, (suite) => {
           }],
         }, {
           type: 'event:validate',
-          value: 'g',
-        }, { pending: [] }, {
+          value: 'e',
+        }, {
+          pending: [{
+            type: 'next',
+            value: 'six',
+          }],
+        }, {
           type: 'event:revert',
-          value: 'g',
+          value: 'e',
+        }, { pending: [] }, {
+          type: 'next',
+          value: 10,
         }, {
           pending: [{
             type: 'next',
             value: 10,
           }],
         }, {
-          type: 'next',
-          value: 10,
-        }, {
           type: 'event:validate',
-          value: 'j',
-        }, { pending: [] }, { currentValue: 10 }, {
+          value: 'h',
+        }, {
           type: 'event:commit',
-          value: 'j',
-        }]);
+          value: 'h',
+        }, {
+          type: 'event:flushAfter',
+          value: 7,
+        }, { pending: [] }, { currentValue: 10 }]);
       tNext.end();
-    });
-
-    suiteTests.test('children', (ch) => {
-      ch.end();
     });
 
     suiteTests.end();

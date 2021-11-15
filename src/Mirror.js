@@ -7,18 +7,15 @@ import {lGet, isEqual, uniq} from './utils';
 enableMapSet();
 import {
   ABSENT,
-  EVENT_TYPE_COMMIT,
   EVENT_TYPE_NEXT,
-  EVENT_TYPE_REVERT,
   NAME_UNNAMED,
   TYPE_MAP,
   TYPE_OBJECT,
   TYPE_VALUE,
   EVENT_TYPE_VALIDATE,
-  EVENT_TYPE_SHARD, EVENT_TYPE_COMMIT_CHILDREN
 } from './constants';
 import {
-  toMap, toObj, isMap, isObj, noop, maybeImmer, e, isFn, isThere, isArr, isStr, unsub, ucFirst, strip, mapFromKeys
+  toMap, toObj, isMap, isObj, noop, maybeImmer, e, isFn, isThere, strip,
 } from './utils';
 import { mirrorType, initQueue, makeDoProxy, makeDoObj, lazy } from './mirrorMisc';
 import withTrans from './withTrans';
@@ -32,7 +29,7 @@ import MirrorTrans from './MirrorTrans';
  * which, when updated, update the parent.
  * This allows for field level validation, transactional updates and all sorts of other goodies.
  */
-export default class Mirror extends (withChildren(withEvents(withTrans(BehaviorSubject)))) {
+export default class Mirror extends withAction(withChildren(withEvents(withTrans(BehaviorSubject)))) {
   constructor(value, config = ABSENT) {
     super(value);
     this.$configure(config);
@@ -55,6 +52,7 @@ export default class Mirror extends (withChildren(withEvents(withTrans(BehaviorS
       parent = ABSENT,
       children = ABSENT,
       actions = ABSENT,
+      transQueue = ABSENT
     } = toObj(config);
 
     if (isThere(actions) && isObj(actions)) {
@@ -62,6 +60,9 @@ export default class Mirror extends (withChildren(withEvents(withTrans(BehaviorS
         .forEach((actionName) => {
           this.$addAction(actionName, actions[actionName]);
         });
+    }
+    if (isThere(transQueue)) {
+      this.$transQueue = transQueue;
     }
 
     if (isThere(name)) {

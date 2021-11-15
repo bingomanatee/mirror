@@ -1,6 +1,5 @@
 import { Subject } from 'rxjs';
 import { filter } from 'rxjs/operators';
-import uniq from 'lodash/uniq';
 
 import {
   ABSENT, EVENT_TYPE_COMMIT,
@@ -41,7 +40,7 @@ export default (BaseClass) => class WithEvents extends BaseClass {
   }
 
   $event(type, value = ABSENT, config = {}) {
-    const event = MirrorTrans.make({
+    const event = MirrorTrans.make(this, {
       type,
       value,
       ...config,

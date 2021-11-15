@@ -61,6 +61,17 @@ export default (BaseClass) => class WithChildren extends BaseClass {
     return lazy(this, '$__childSubs', () => new Map());
   }
 
+  get $root() {
+    return this.$parent ? this.parent.$root : this;
+  }
+
+  get $_transOrder() {
+    lazy(this, '$__transOrder', () => 0);
+    const out = this.$__transOrder;
+    this.$__transOrder += 1;
+    return out;
+  }
+
   $addChild(name, value, type = TYPE_VALUE) {
     if (this.isStopped) {
       throw e('attempt to redefine stopped mirror', {

@@ -1,9 +1,8 @@
 import produce from 'immer';
 import { e, isFn, isStr } from './utils';
 import {
-  EVENT_TYPE_ACTION, EVENT_TYPE_COMMIT,
-  EVENT_TYPE_MUTATE, EVENT_TYPE_REVERT,
-  TRANS_TYPE_ACTION,
+  EVENT_TYPE_ACTION,
+  EVENT_TYPE_MUTATE,
   TYPE_MAP,
   TYPE_OBJECT,
 } from './constants';
@@ -23,7 +22,7 @@ export default (BaseClass) => class WithAction extends BaseClass {
           t.$_actions.get(name)(t, ...args);
           this.$commit(id);
         } catch (err) {
-          t.$revert(id);
+          t.$_removeTrans(id);
         }
       }
     });
@@ -67,6 +66,17 @@ export default (BaseClass) => class WithAction extends BaseClass {
         }
       },
     );
+  }
+
+  get $isInAction() {
+    const action = this.$_pending.value.find(({ type }) => type === EVENT_TYPE_ACTION);
+    if (action) {
+      return true;
+    }
+    if (this.$parent) {
+      return this.$parent.$isInAction;
+    }
+    return false;
   }
 
   get $_actions() {

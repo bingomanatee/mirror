@@ -32,10 +32,9 @@ export default class MirrorTrans {
 
 MirrorTrans[immerable] = true;
 
-MirrorTrans.make = (...args) => {
+MirrorTrans.make = (mirror, ...args) => {
   const trans = new MirrorTrans(...args);
-  trans.id = id();
-  trans.order = order;
-  order += 1;
+  trans.id = mirror.$transQueue ? mirror.$transQueue.shift() : id();
+  trans.order = mirror.$root.$_transOrder;
   return trans;
 };

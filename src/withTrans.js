@@ -3,7 +3,7 @@ import produce from 'immer';
 import { BehaviorSubject } from 'rxjs';
 import uniq from 'lodash/uniq';
 import {
-  ABSENT, EVENT_TYPE_COMMIT,
+  ABSENT, EVENT_TYPE_ACTION, EVENT_TYPE_COMMIT, EVENT_TYPE_FLUSH_AFTER,
   EVENT_TYPE_NEXT, EVENT_TYPE_REVERT,
   TRANS_STATE_COMPLETE,
   TRANS_TYPE_CHANGE,
@@ -20,13 +20,38 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
     });
 
     this.$on(EVENT_TYPE_COMMIT, (id, event, target) => {
-      target.$children.forEach((child) => {
-        const trans = child.$_getTransForParent(id);
-        if (trans) {
-          child.$event(EVENT_TYPE_COMMIT, trans.id);
+      try {
+        const trans = target.$_getTrans(id);
+        if (trans.type === EVENT_TYPE_ACTION) {
+          target.$_removeTrans(id);
         }
+
+        if (target.$isInAction) {
+          console.log('--- has $isInAction -- not flushing');
+          return;
+        }
+
+        target.$event(EVENT_TYPE_FLUSH_AFTER, trans.order);
+      } catch (err) {
+        console.log('--- error in commit: ', err);
+      }
+    });
+
+    this.$on(EVENT_TYPE_FLUSH_AFTER, (order, event, target) => {
+      if (target.$isInAction) {
+        return;
+      }
+      target.$children.forEach((child) => {
+        child.$event(EVENT_TYPE_FLUSH_AFTER, order);
       });
-      target.$_commitTrans(id);
+
+      const pendingNext = target.$_pending.value.filter(
+        (trans) => (trans.type === EVENT_TYPE_NEXT) && (trans.order >= order),
+      );
+      const last = pendingNext.pop();
+      if (last) {
+        target.$_commitTrans(last.id);
+      }
     });
   }
 
@@ -81,12 +106,14 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
 
   /**
    * commits a transaction's value to the mirror.
-   * @param trans MirrorTrans
+   * @param id {String}
    */
   $_commitTrans(id) {
     const trans = this.$_getTrans(id);
     this.$_removeTrans(id);
-    super.next(trans.value);
+    if (trans) {
+      super.next(trans.value);
+    }
     return this;
   }
 
@@ -94,7 +121,8 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
     if (this.isStopped) {
       throw e('cannot transact on stopped mirror', { trans: def });
     }
-    const trans = produce(def, (draft) => MirrorTrans.make(draft));
+    const mirror = this;
+    const trans = produce(def, (draft) => MirrorTrans.make(mirror, draft));
     this.$_upsertTrans(trans);
     if (trans.type === TRANS_TYPE_CHANGE) {
       this.$_sendToChildren(trans.value);
@@ -102,12 +130,8 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
     return trans;
   }
 
-  $_getTrans(matchTo) {
-    return this.$_pending.value.find((trans) => trans.matches(matchTo));
-  }
-
-  $_getTransForParent(parentId) {
-    return this.$_pending.value.find((trans) => trans.parent === parentId);
+  $_getTrans(id) {
+    return this.$_pending.value.find((trans) => trans.matches(id));
   }
 
   $_addErrorsToTrans(matchTo, errors) {
