@@ -18,15 +18,17 @@ import { newMirror } from './newMirror';
 export default (BaseClass) => class WithChildren extends BaseClass {
   constructor(...args) {
     super(...args);
-    this.$on(EVENT_TYPE_SHARD, (id, event, target) => {
-      const trans = target.$_getTrans(id);
-      const mapped = toMap(trans.value);
-      mapped.forEach((childValue, key) => {
-        if (target.$hasChild(key)) {
-          const child = target.$children.get(key);
-          child.$event(EVENT_TYPE_NEXT, childValue, { parent: trans.id });
-        }
-      });
+
+    this.$on(EVENT_TYPE_NEXT, (value, p, target) => {
+      if (this.$isContainer) {
+        toMap(value)
+          .forEach((childValue, key) => {
+            if (target.$hasChild(key)) {
+              const child = target.$children.get(key);
+              child.$event(EVENT_TYPE_NEXT, childValue, { parent: p.id });
+            }
+          });
+      }
     });
 
     this.$on(EVENT_TYPE_VALIDATE, (id, event, target) => {
@@ -45,18 +47,9 @@ export default (BaseClass) => class WithChildren extends BaseClass {
     this.$on(EVENT_TYPE_REVERT, (id, event, target) => {
       if (target.$isContainer) {
         target.$children.forEach((child) => {
-          child.$_purgeChangesAfter(id);
+          child.$_revertTrans(id);
         });
       }
-    });
-
-    this.$on(EVENT_TYPE_COMMIT_CHILDREN, (id, event, target) => {
-      target.$children.forEach((child) => {
-        const trans = target.$_getTransForParent(id);
-        if (trans) {
-          child.$event(EVENT_TYPE_COMMIT, trans.id);
-        }
-      });
     });
   }
 

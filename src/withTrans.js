@@ -3,11 +3,9 @@ import produce from 'immer';
 import { BehaviorSubject } from 'rxjs';
 import uniq from 'lodash/uniq';
 import {
-  ABSENT,
-  EVENT_TYPE_ACTION,
-  EVENT_TYPE_NEXT,
-  TRANS_STATE_COMPLETE, TRANS_STATE_ERROR,
-  TRANS_TYPE_ACTION,
+  ABSENT, EVENT_TYPE_COMMIT,
+  EVENT_TYPE_NEXT, EVENT_TYPE_REVERT,
+  TRANS_STATE_COMPLETE,
   TRANS_TYPE_CHANGE,
 } from './constants';
 import { e, isThere } from './utils';
@@ -17,6 +15,19 @@ import MirrorTrans from './MirrorTrans';
 export default (BaseClass) => (class WithTrans extends BaseClass {
   constructor(...init) {
     super(...init);
+    this.$on(EVENT_TYPE_REVERT, (id, event, target) => {
+      target.$_removeTrans(id);
+    });
+
+    this.$on(EVENT_TYPE_COMMIT, (id, event, target) => {
+      target.$children.forEach((child) => {
+        const trans = child.$_getTransForParent(id);
+        if (trans) {
+          child.$event(EVENT_TYPE_COMMIT, trans.id);
+        }
+      });
+      target.$_commitTrans(id);
+    });
   }
 
   get $_pending() {
@@ -60,13 +71,21 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
     return this;
   }
 
+  $commit(id) {
+    this.$event(EVENT_TYPE_COMMIT, id);
+  }
+
+  $revert(id) {
+    this.$event(EVENT_TYPE_REVERT, id);
+  }
+
   /**
    * commits a transaction's value to the mirror.
    * @param trans MirrorTrans
    */
   $_commitTrans(id) {
     const trans = this.$_getTrans(id);
-    this.$_purgeChangesAfter(trans);
+    this.$_removeTrans(id);
     super.next(trans.value);
     return this;
   }
@@ -95,6 +114,7 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
     const uinqErrors = uniq(errors)
       .filter((e) => e);
     if (uinqErrors.length > 0) {
+      console.log('--- errors found:', errors, 'for', matchTo);
       this.$_updateTrans(matchTo, (draft) => {
         draft.errors = uniq([...draft.errors, ...uinqErrors])
           .filter((e) => e);
@@ -120,7 +140,7 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
     return null;
   }
 
-  $_purgeChangesAfter(id) {
+  $_removeTrans(id) {
     const trans = this.$_getTrans(id);
     const list = this.$_pending.value.filter((aTrans) => (aTrans.type !== EVENT_TYPE_NEXT) || aTrans.before(trans));
     this.$_pending.next(list);
@@ -132,10 +152,11 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
     }
     if (event.hasError) {
       if (event.$trans) {
-        this.$revertTrans(event.$trans);
+        this.$_removeTrans(event.$trans);
       }
       throw event.thrownError;
     }
+    this.$_addTrans(event);
   }
 
   getValue() {

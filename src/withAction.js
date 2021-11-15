@@ -1,8 +1,8 @@
 import produce from 'immer';
 import { e, isFn, isStr } from './utils';
 import {
-  EVENT_TYPE_ACTION,
-  EVENT_TYPE_MUTATE,
+  EVENT_TYPE_ACTION, EVENT_TYPE_COMMIT,
+  EVENT_TYPE_MUTATE, EVENT_TYPE_REVERT,
   TRANS_TYPE_ACTION,
   TYPE_MAP,
   TYPE_OBJECT,
@@ -13,29 +13,17 @@ export default (BaseClass) => class WithAction extends BaseClass {
   constructor(...init) {
     super(...init);
 
-    this.$on(EVENT_TYPE_ACTION, ({
-      name,
-      args,
-    }, p, t) => {
-      p.$trans = t.$_addTrans({
-        type: TRANS_TYPE_ACTION,
-        name,
-        args,
-      });
-    });
-    this.$on(EVENT_TYPE_ACTION, ({
-      name,
-      args,
-    }, p, t) => {
+    this.$on(EVENT_TYPE_ACTION, (args, trans, t) => {
+      const { id, name } = trans;
       if (!t.$_actions.has(name)) {
-        p.error(e(`no action named ${name}`));
+        throw e(`no action named ${name}`);
       } else {
+        t.$_addTrans(trans);
         try {
           t.$_actions.get(name)(t, ...args);
-          p.$trans.complete();
+          this.$commit(id);
         } catch (err) {
-          p.error(err);
-          p.$trans.error(err);
+          t.$revert(id);
         }
       }
     });
@@ -159,29 +147,28 @@ export default (BaseClass) => class WithAction extends BaseClass {
 
   $set(name, value) {
     if (!this.$isContainer) {
-      throw e('cannot set to non-container', {
+      throw e('cannot set non-container', {
         name,
         value,
         target: this,
       });
     }
-    let event;
+
     if (this.$hasChild(name)) {
-      event = this.$children.get(name)
-        .set(value);
+      this.$children.get(name)
+        .next(value);
+      return;
     }
+    // containers can have values not managed by children.
     if (this.$type === TYPE_MAP) {
-      event = this.$mutate((draft) => {
+      this.$mutate((draft) => {
         draft.set(name, value);
       });
     }
     if (this.$type === TYPE_OBJECT) {
-      event = this.$mutate((draft) => {
+      this.$mutate((draft) => {
         draft[name] = value;
       });
     }
-
-    this.$postEvent(event);
-    return event;
   }
 };

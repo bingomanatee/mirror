@@ -11,6 +11,7 @@
   "rules": {
     "max-len": [2, { "code": 120 }],
     "no-plusplus": [1],
+    "no-param-reassign": "warn",
     "camelcase": 0,
     "react/jsx-filename-extension": 0,
     "react/no-array-index-key": 1,

@@ -2,7 +2,7 @@ import hyperid from 'hyperid';
 import { immerable } from 'immer';
 import { lGet } from './utils';
 import {
-  ABSENT, TRANS_TYPE_CHANGE,
+  ABSENT, EVENT_TYPE_NEXT, TRANS_TYPE_CHANGE,
 } from './constants';
 
 import { id } from './idGen';
@@ -11,7 +11,7 @@ let order = 0;
 export default class MirrorTrans {
   constructor({
     name = ABSENT,
-    type = TRANS_TYPE_CHANGE,
+    type = EVENT_TYPE_NEXT,
     value = ABSENT,
     errors = [],
   }) {

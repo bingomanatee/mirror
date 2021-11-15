@@ -2,6 +2,7 @@ import tap from 'tap';
 import _ from 'lodash';
 import { map } from 'rxjs/operators';
 import watch from '../watch';
+import transWatch from '../transWatch';
 
 const p = require('../package.json');
 
@@ -55,39 +56,28 @@ tap.test(p.name, (suite) => {
 
     suiteTests.test('next - trans', (tNext) => {
       const m = new Subject(4);
-      const queue = [];
-
-      m.$_pending.subscribe((list) => queue.push({ pending: list.map(reducePending) }));
-      m.subscribe((value) => queue.push({ currentValue: value }));
-      m.$_eventQueue.subscribe((e) => queue.push(reducePending(e)));
+      const { queue } = transWatch(m);
 
       m.next(5);
 
       tNext.same(m.value, 5);
-
+      // console.log('queue:', JSON.stringify(queue));
       tNext.same(queue,
-        [{ pending: [] },
-          { currentValue: 4 },
-          {
-            pending: [{
-              type: 'next',
-              value: 5,
-            }],
-          },
-          {
+        [{ pending: [] }, { currentValue: 4 }, {
+          pending: [{
             type: 'next',
             value: 5,
-          },
-          {
-            type: 'event:validate',
-            value: 'a',
-          },
-          { pending: [] },
-          { currentValue: 5 },
-          {
-            type: 'event:commit',
-            value: 'a',
-          }]);
+          }],
+        }, {
+          type: 'next',
+          value: 5,
+        }, {
+          type: 'event:validate',
+          value: 'a',
+        }, { pending: [] }, { currentValue: 5 }, {
+          type: 'event:commit',
+          value: 'a',
+        }]);
       tNext.end();
     });
 
@@ -99,26 +89,21 @@ tap.test(p.name, (suite) => {
           }
         },
       });
-      const queue = [];
-
-      m.$_pending.subscribe((list) => queue.push({ pending: list.map(reducePending) }));
-      m.subscribe((value) => queue.push({ currentValue: value }));
-      m.$_eventQueue.subscribe((e) => queue.push(reducePending(e)));
+      const { queue } = transWatch(m);
 
       m.next(5);
       let error = null;
       try {
         m.next('six');
       } catch (err) {
-        console.log('thrown error from bad next:', err);
         error = err;
       }
       tNext.same(error, [NNV]);
       tNext.same(m.value, 5);
-
       m.next(10);
 
       tNext.same(m.value, 10);
+      //  console.log('queue after 10', JSON.stringify(queue));
       tNext.same(queue,
         [{ pending: [] }, { currentValue: 4 }, {
           pending: [{
@@ -169,6 +154,10 @@ tap.test(p.name, (suite) => {
           value: 'j',
         }]);
       tNext.end();
+    });
+
+    suiteTests.test('children', (ch) => {
+      ch.end();
     });
 
     suiteTests.end();

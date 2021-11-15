@@ -19,7 +19,7 @@ export default (BaseClass) => class WithEvents extends BaseClass {
       this.$_upsertTrans(trans);
     });
 
-    this.$on(EVENT_TYPE_VALIDATE, (trans, event, target) => {
+    this.$on(EVENT_TYPE_VALIDATE, (id, event, target) => {
       if (isFn(target.$test)) {
         let errors = [];
         try {
@@ -27,16 +27,8 @@ export default (BaseClass) => class WithEvents extends BaseClass {
         } catch (err) {
           errors = [err];
         }
-        target.$_addErrorsToTrans(trans, errors);
+        target.$_addErrorsToTrans(id, errors);
       }
-    });
-
-    this.$on(EVENT_TYPE_REVERT, (id, event, target) => {
-      target.$_purgeChangesAfter(id);
-    });
-
-    this.$on(EVENT_TYPE_COMMIT, (id, event, target) => {
-      target.$_commitTrans(id);
     });
   }
 

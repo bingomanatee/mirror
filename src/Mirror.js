@@ -130,20 +130,14 @@ export default class Mirror extends (withChildren(withEvents(withTrans(BehaviorS
     }
     else {
       const {id} = this.$event(EVENT_TYPE_NEXT, nextValue);
-      if (this.$isContainer) {
-        this.$event(EVENT_TYPE_SHARD, id);
-      }
-
       this.$event(EVENT_TYPE_VALIDATE, id);
       const currentTrans = this.$_getTrans(id);
-      if (lGet(currentTrans, 'errors.length', 0) > 0) {
-        this.$event(EVENT_TYPE_REVERT, id);
+      if (currentTrans && (currentTrans.errors.length > 0)) {
+        this.$revert(id);
         throw currentTrans.errors;
+      } else {
+        this.$commit(id);
       }
-      if (this.$isContainer) {
-        this.$event(EVENT_TYPE_COMMIT_CHILDREN, id);
-      }
-      this.$event(EVENT_TYPE_COMMIT, id);
     }
   }
 
