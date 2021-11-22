@@ -15,6 +15,7 @@ const Subject = lib[subjectName];
 tap.test(p.name, (suite) => {
   suite.test(`${subjectName} (Value type)`, (subjectTests) => {
     subjectTests.test('actions', (wa) => {
+      console.log('------- offset ----------');
       const m = new Subject({
         x: 0,
         y: 0,
@@ -27,7 +28,7 @@ tap.test(p.name, (suite) => {
           },
 
           offset(trans, x = 0, y = 0) {
-            console.log('---- starting offset,', trans, x, y);
+            console.log('---- starting offset,', x, y);
             try {
               trans.$do.setX(trans.value.x + x);
               trans.$do.setY(trans.value.y + y);
@@ -48,6 +49,7 @@ tap.test(p.name, (suite) => {
       wa.same(queue,
         OFFSET_EXPECT);
 
+      console.log('------- offset END ----------');
       wa.end();
     });
 
@@ -63,8 +65,7 @@ tap.test(p.name, (suite) => {
       m.$set('x', 3);
       st.same(m.value.x, 3);
       st.same(m.value.y, 0);
-      console.log('set queue:', JSON.stringify(queue));
-      st.ok(typeof queue[2].value.fn === 'function');
+      console.log('------ set queue:', JSON.stringify(queue));
       delete queue[2].value.fn;
       st.same(queue,
         SET_EXPECT);

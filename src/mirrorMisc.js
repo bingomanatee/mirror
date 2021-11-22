@@ -127,10 +127,7 @@ export function makeDoProxy(mirror) {
   return new Proxy(mirror, {
     get(target, prop) {
       if (target.$__actions && target.$_actions.has(prop)) {
-        return (...args) => target.$event(EVENT_TYPE_ACTION, {
-          name: prop,
-          args,
-        });
+        return (...args) => target.$action(prop, args);
       }
       if (target.$isContainer) {
         if (isStr(prop)) {

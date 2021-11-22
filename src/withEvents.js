@@ -40,11 +40,12 @@ export default (BaseClass) => class WithEvents extends BaseClass {
   }
 
   $event(type, value = ABSENT, config = {}) {
-    const event = MirrorTrans.make(this, {
+    const def = {
+      ...config,
       type,
       value,
-      ...config,
-    });
+    };
+    const event = MirrorTrans.make(this, def);
     this.$_eventQueue.next(event);
     return event;
   }

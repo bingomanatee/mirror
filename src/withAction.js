@@ -14,18 +14,17 @@ export default (BaseClass) => class WithAction extends BaseClass {
 
     this.$on(EVENT_TYPE_ACTION, (action, trans, t) => {
       const { name, args } = action;
-     // console.log('-- event type action: args ', args, 'trans = ', trans);
       if (!t.$_actions.has(name)) {
         throw e(`no action named ${name}`);
       } else {
         t.$_addTrans(trans);
         try {
           t.$_actions.get(name)(t, ...args);
-          console.log('--- done with action', name, ' --- committing trans ', action);
-          this.$commit(trans);
+          t.$_removeTrans(trans);
+          t.$commit();
         } catch (err) {
           console.log('--- error with action', name, ':', err);
-          t.$_removeTrans(trans.id);
+          t.$revert(trans);
         }
       }
     });
@@ -47,7 +46,7 @@ export default (BaseClass) => class WithAction extends BaseClass {
   }
 
   get $isInAction() {
-    const action = this.$_pending.value.find(({ type }) => type === EVENT_TYPE_ACTION);
+    const action = this.$_pending.value.find(({ type, committed }) => (!committed) && (type === EVENT_TYPE_ACTION));
     if (action) {
       return true;
     }
@@ -107,7 +106,6 @@ export default (BaseClass) => class WithAction extends BaseClass {
     if (this.$_actions.has(name)) {
       console.warn('overwriting existing action in mirror', this);
     }
-    console.log('adding action:', name);
     this.$_actions.set(name, fn);
   }
 
@@ -126,11 +124,7 @@ export default (BaseClass) => class WithAction extends BaseClass {
     const event = this.$event(EVENT_TYPE_ACTION, {
       name,
       args,
-    });
-    if (event.hasError && event.$trans) {
-      this.$revertTrans(event.$trans);
-      throw event.thrownError;
-    }
+    }, { name });
     return event;
   }
 
@@ -142,7 +136,6 @@ export default (BaseClass) => class WithAction extends BaseClass {
         target: this,
       });
     }
-    console.log('setting', name, value);
 
     if (this.$hasChild(name)) {
       this.$children.get(name)

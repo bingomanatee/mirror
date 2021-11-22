@@ -1,151 +1,65 @@
 [
+  {"pending": []},
+  {"currentValue": {"x": 0, "y": 0}},
   {
-    "pending": []
-  },
-  {
-    "currentValue": {
-      "x": 0,
-      "y": 0
-    }
-  },
-  {
-    "type": "event:action",
-    "value": {
-      "name": "offset",
-      "args": [
-        3,
-        4
-      ]
-    }
+    "type": "event:action", "value": {
+    "name": "offset", "args": [
+      3,
+      4
+    ]
+  }
   },
   {
     "pending": [
       {
-        "type": "event:action",
-        "value": {
-          "name": "offset",
-          "args": [
-            3,
-            4
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "type": "event:mutate",
-    "value": {
-      "args": []
-    }
-  },
-  {
-    "type": "next",
-    "value": {
-      "x": 3,
-      "y": 0
-    }
-  },
-  {
-    "pending": [
-      {
-        "type": "event:action",
-        "value": {
-          "name": "offset",
-          "args": [
-            3,
-            4
-          ]
-        }
-      },
-      {
-        "type": "next",
-        "value": {
-          "x": 3,
-          "y": 0
-        }
-      }
-    ]
-  },
-  {
-    "type": "event:validate",
-    "value": "d"
-  },
-  {
-    "type": "event:commit",
-    "value": {
-      "type": "next",
-      "value": {
-        "x": 3,
-        "y": 0
-      }
-    }
-  },
-  {
-    "type": "event:mutate",
-    "value": {
-      "args": []
-    }
-  },
-  {
-    "type": "next",
-    "value": {
-      "x": 3,
-      "y": 4
-    }
-  },
-  {
-    "pending": [
-      {
-        "type": "event:action",
-        "value": {
-          "name": "offset",
-          "args": [
-            3,
-            4
-          ]
-        }
-      },
-      {
-        "type": "next",
-        "value": {
-          "x": 3,
-          "y": 0
-        }
-      },
-      {
-        "type": "next",
-        "value": {
-          "x": 3,
-          "y": 4
-        }
-      }
-    ]
-  },
-  {
-    "type": "event:validate",
-    "value": "h"
-  },
-  {
-    "type": "event:commit",
-    "value": {
-      "type": "next",
-      "value": {
-        "x": 3,
-        "y": 4
-      }
-    }
-  },
-  {
-    "type": "event:commit",
-    "value": {
-      "type": "event:action",
-      "value": {
-        "name": "offset",
-        "args": [
+        "type": "event:action", "value": {
+        "name": "offset", "args": [
           3,
           4
         ]
       }
-    }
-  }
+      }
+    ]
+  },
+  {"type": "event:mutate", "value": {"args": []}},
+  {"type": "next", "value": {"x": 3, "y": 0}},
+  {
+    "pending": [
+      {
+        "type": "event:action", "value": {
+        "name": "offset", "args": [
+          3,
+          4
+        ]
+      }
+      },
+      {"type": "next", "value": {"x": 3, "y": 0}}
+    ]
+  },
+  {"type": "event:validate", "value": "c"},
+  {"type": "event:mutate", "value": {"args": []}},
+  {"type": "next", "value": {"x": 3, "y": 4}},
+  {
+    "pending": [
+      {
+        "type": "event:action", "value": {
+        "name": "offset", "args": [
+          3,
+          4
+        ]
+      }
+      },
+      {"type": "next", "value": {"x": 3, "y": 0}},
+      {"type": "next", "value": {"x": 3, "y": 4}}
+    ]
+  },
+  {"type": "event:validate", "value": "f"},
+  {
+    "pending": [
+      {"type": "next", "value": {"x": 3, "y": 0}},
+      {"type": "next", "value": {"x": 3, "y": 4}}
+    ]
+  },
+  {"pending": []},
+  {"currentValue": {"x": 3, "y": 4}}
 ]

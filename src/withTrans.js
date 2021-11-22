@@ -8,7 +8,9 @@ import {
   TRANS_STATE_COMPLETE,
   TRANS_TYPE_CHANGE, EVENT_TYPE_REMOVE_AFTER,
 } from './constants';
-import { e, isThere } from './utils';
+import {
+  e, isThere, sortBy, isEqual,
+} from './utils';
 import { lazy } from './mirrorMisc';
 import MirrorTrans from './MirrorTrans';
 
@@ -17,25 +19,6 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
     super(...init);
     this.$on(EVENT_TYPE_REVERT, (id, event, target) => {
       target.$_removeTrans(id);
-    });
-
-    this.$on(EVENT_TYPE_COMMIT, (trans, event, target) => {
-      try {
-        if (trans.type === EVENT_TYPE_ACTION) {
-          console.log('--- removing completed action from queue', trans);
-          target.$_removeTrans(trans.id);
-        }
-        if (target.$isInAction) {
-          console.log('--- has $isInAction -- not flushing');
-          return;
-        }
-        console.log('--- fully committing trans ', trans);
-
-        target.$event(EVENT_TYPE_ACCEPT_AFTER, trans);
-        target.$_removeTrans(trans.id);
-      } catch (err) {
-        console.log('--- error in commit: ', err, 'id = ', id, 'pending = ', this.$_pending.value);
-      }
     });
 
     this.$on(EVENT_TYPE_REMOVE_AFTER, (order, event, target) => {
@@ -71,7 +54,20 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
   }
 
   get $_pending() {
-    return lazy(this, '$__pending', () => new BehaviorSubject([]));
+    return lazy(this, '$__pending', (target) => {
+      const subject = new BehaviorSubject([]);
+      subject.subscribe((list) => {
+        delete target.$_lastPendingTrans;
+        for (let i = list.length - 1; i >= 0; i -= 1) {
+          const trans = list[i];
+          if (trans.type === EVENT_TYPE_NEXT) {
+            target.$_lastPendingTrans = trans;
+            break;
+          }
+        }
+      });
+      return subject;
+    });
   }
 
   $_upsertTrans(item) {
@@ -85,34 +81,24 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
   }
 
   /**
-   * flushTrans checks if the transactions are all complete;
-   * if they are, then the last value in the list is committed, and all the transactions
-   * are removed from the $pending queue.
-   * @param list
+   * evaluate $_pending to attempt to update the base Subject,
+   * as long as there are no active actions.
+   * Perconate leaf-down to ensure that child pending updates resolve first.
    */
-  $_flushPendingIfDone(list) {
-    if (!isThere(list)) {
-      return this.$_flushPendingIfDone(this.$_pending.value);
+  $commit() {
+    if (this.$isInAction) {
+      return;
     }
-    if (list.length) {
-      if (list.every((transaction) => transaction.state === TRANS_STATE_COMPLETE)) {
-        if (this.$isContainer) {
-          this.$children.forEach((child) => child.$_flushPendingIfDone());
-        }
-        this.$_commitTrans(list);
-      }
-    } else if (this.$isContainer) {
-      // no transactions in this container, but there may be some in children
-      // @TODO: might cause more than one update to root (this);
-      // put under their own transaction? or poll then flush (or both)?
-      // or, float shards into the parent class?
-      this.$children.forEach((child) => child.$_flushPendingIfDone());
+    if (this.$isContainer) {
+      this.$children.forEach((child) => {
+        child.$commit();
+      });
     }
-    return this;
-  }
-
-  $commit(trans) {
-    this.$event(EVENT_TYPE_COMMIT, trans);
+    if (this.$_pending.value.length) {
+      const last = sortBy(this.$_pending.value, 'order').pop();
+      this.$_pending.next([]);
+      this.$_superNext(last.value);
+    }
   }
 
   $revert(id) {
@@ -133,7 +119,7 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
       throw e('cannot transact on stopped mirror', { trans: def });
     }
     const mirror = this;
-    const trans = produce(def, (draft) => MirrorTrans.make(mirror, draft));
+    const trans = def instanceof MirrorTrans ? def : produce(def, (draft) => MirrorTrans.make(mirror, draft));
     this.$_upsertTrans(trans);
     if (trans.type === TRANS_TYPE_CHANGE) {
       this.$_sendToChildren(trans.value);
@@ -149,7 +135,6 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
     const uinqErrors = uniq(errors)
       .filter((e) => e);
     if (uinqErrors.length > 0) {
-      console.log('--- errors found:', errors, 'for', matchTo);
       this.$_updateTrans(matchTo, (draft) => {
         draft.errors = uniq([...draft.errors, ...uinqErrors])
           .filter((e) => e);
@@ -170,28 +155,18 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
       this.$_upsertTrans(nextTrans);
       return nextTrans;
     }
-    console.log('cannot find match for ', matchTo, 'in', this.$_pending.value);
 
     return null;
   }
 
-  $_removeTrans(id) {
-    const trans = this.$_getTrans(id);
-    const list = this.$_pending.value.filter((aTrans) => (aTrans.type !== EVENT_TYPE_NEXT) || aTrans.before(trans));
+  $_removeTrans(transOrId) {
+    const current = this.$_pending.value;
+    const list = current.filter((aTrans) => !aTrans.matches(transOrId));
     this.$_pending.next(list);
-  }
-
-  $postEvent(event) {
-    if (!event) {
-      return;
-    }
-    if (event.hasError) {
-      if (event.$trans) {
-        this.$_removeTrans(event.$trans);
-      }
-      throw event.thrownError;
-    }
-    this.$_addTrans(event);
+    return {
+      current,
+      list,
+    };
   }
 
   getValue() {
@@ -199,17 +174,7 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
     return lastTrans ? lastTrans.value : super.getValue();
   }
 
-  get $_lastPendingTrans() {
-    const list = [...this.$_pending.value];
-    return list.reverse()
-      .reduce((last, trans) => {
-        if (last) {
-          return last;
-        }
-        if (trans.type === EVENT_TYPE_NEXT) {
-          return trans;
-        }
-        return last;
-      }, null);
+  get $_pendingActive() {
+    return !!this.$_pending.value.length;
   }
 });

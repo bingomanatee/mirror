@@ -1,111 +1,36 @@
 [
-  {
-    "pending": []
-  },
-  {
-    "currentValue": 4
-  },
-  {
-    "type": "next",
-    "value": 5
-  },
+  {"pending": []},
+  {"currentValue": 4},
+  {"type": "next", "value": 5},
   {
     "pending": [
-      {
-        "type": "next",
-        "value": 5
-      }
+      {"type": "next", "value": 5}
     ]
   },
-  {
-    "type": "event:validate",
-    "value": "a"
-  },
-  {
-    "type": "event:commit",
-    "value": {
-      "type": "next",
-      "value": 5
-    }
-  },
-  {
-    "type": "event:acceptAfter",
-    "value": {
-      "type": "next",
-      "value": 5
-    }
-  },
-  {
-    "currentValue": 5
-  },
-  {
-    "pending": []
-  },
-  {
-    "type": "next",
-    "value": "six"
-  },
+  {"type": "event:validate", "value": "a"},
+  {"pending": []},
+  {"currentValue": 5},
+  {"type": "next", "value": "six"},
   {
     "pending": [
-      {
-        "type": "next",
-        "value": "six"
-      }
+      {"type": "next", "value": "six"}
     ]
   },
-  {
-    "type": "event:validate",
-    "value": "e"
-  },
+  {"type": "event:validate", "value": "c"},
   {
     "pending": [
-      {
-        "type": "next",
-        "value": "six"
-      }
+      {"type": "next", "value": "six"}
     ]
   },
-  {
-    "type": "event:revert",
-    "value": "e"
-  },
-  {
-    "pending": []
-  },
-  {
-    "type": "next",
-    "value": 10
-  },
+  {"type": "event:revert", "value": {"type": "next", "value": "six"}},
+  {"pending": []},
+  {"type": "next", "value": 10},
   {
     "pending": [
-      {
-        "type": "next",
-        "value": 10
-      }
+      {"type": "next", "value": 10}
     ]
   },
-  {
-    "type": "event:validate",
-    "value": "h"
-  },
-  {
-    "type": "event:commit",
-    "value": {
-      "type": "next",
-      "value": 10
-    }
-  },
-  {
-    "type": "event:acceptAfter",
-    "value": {
-      "type": "next",
-      "value": 10
-    }
-  },
-  {
-    "currentValue": 10
-  },
-  {
-    "pending": []
-  }
+  {"type": "event:validate", "value": "f"},
+  {"pending": []},
+  {"currentValue": 10}
 ]

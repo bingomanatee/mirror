@@ -19,6 +19,9 @@ export default (BaseClass) => class WithChildren extends BaseClass {
   constructor(...args) {
     super(...args);
 
+    /**
+     * enqueues pending value in the queue; does NOT trigger subscribers.
+     */
     this.$on(EVENT_TYPE_NEXT, (value, p, target) => {
       if (this.$isContainer) {
         toMap(value)
@@ -92,7 +95,7 @@ export default (BaseClass) => class WithChildren extends BaseClass {
       next() {
         // on a child sub change, set the target to next;
         // child value will get mixed in.
-        if (!target.$isTrying) {
+        if (!target.$_pendingActive) {
           target.next(target.getValue());
         }
       },

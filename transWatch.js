@@ -1,25 +1,37 @@
 import { Subject } from 'rxjs';
 
 function reducePending(trans) {
-  const {
-    value, order, type,
-  } = trans;
-  if (value && typeof (value) === 'object' && ('order' in value)) {
+  try {
+    const {
+      value, type,
+    } = trans;
+    let nextValue = typeof value === 'object' ? { ...value } : value;
+    if (type === 'event:mutate' && typeof value === 'object') {
+      nextValue = { ...value };
+      delete nextValue.fn; // functions don't reduce to JSON - skip it
+    }
+    if (nextValue && typeof (nextValue) === 'object' && ('order' in nextValue)) {
+      return {
+        type,
+        value: reducePending(nextValue),
+      };
+    }
     return {
       type,
-      value: reducePending(value),
+      value: nextValue,
     };
+  } catch (err) {
+    console.log('-=- error in rp:', err, 'for', trans);
+    return trans;
   }
-  return {
-    type,
-    value,
-  };
 }
 
 export default (m) => {
   const queue = [];
 
-  m.$_pending.subscribe((list) => queue.push({ pending: list.map(reducePending) }));
+  m.$_pending.subscribe((list) => {
+    queue.push({ pending: list.map(reducePending) });
+  });
   m.subscribe((value) => queue.push({ currentValue: value }));
   const nativeEventQueue = m.$__eventQueue;
 

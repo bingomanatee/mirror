@@ -134,10 +134,10 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
       this.$event(EVENT_TYPE_VALIDATE, trans.id);
       const currentTrans = this.$_getTrans(trans.id);
       if (currentTrans && (currentTrans.errors.length > 0)) {
-        this.$revert(trans.id);
+        this.$revert(trans);
         throw currentTrans.errors;
       } else {
-        this.$commit(trans);
+        this.$commit();
       }
     }
   }
