@@ -3,10 +3,10 @@ import produce from 'immer';
 import { BehaviorSubject } from 'rxjs';
 import uniq from 'lodash/uniq';
 import {
-  ABSENT, EVENT_TYPE_ACTION, EVENT_TYPE_COMMIT, EVENT_TYPE_FLUSH_AFTER,
+  ABSENT, EVENT_TYPE_ACTION, EVENT_TYPE_COMMIT, EVENT_TYPE_ACCEPT_AFTER,
   EVENT_TYPE_NEXT, EVENT_TYPE_REVERT,
   TRANS_STATE_COMPLETE,
-  TRANS_TYPE_CHANGE,
+  TRANS_TYPE_CHANGE, EVENT_TYPE_REMOVE_AFTER,
 } from './constants';
 import { e, isThere } from './utils';
 import { lazy } from './mirrorMisc';
@@ -19,38 +19,53 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
       target.$_removeTrans(id);
     });
 
-    this.$on(EVENT_TYPE_COMMIT, (id, event, target) => {
+    this.$on(EVENT_TYPE_COMMIT, (trans, event, target) => {
       try {
-        const trans = target.$_getTrans(id);
         if (trans.type === EVENT_TYPE_ACTION) {
-          target.$_removeTrans(id);
+          console.log('--- removing completed action from queue', trans);
+          target.$_removeTrans(trans.id);
         }
-
         if (target.$isInAction) {
           console.log('--- has $isInAction -- not flushing');
           return;
         }
+        console.log('--- fully committing trans ', trans);
 
-        target.$event(EVENT_TYPE_FLUSH_AFTER, trans.order);
+        target.$event(EVENT_TYPE_ACCEPT_AFTER, trans);
+        target.$_removeTrans(trans.id);
       } catch (err) {
-        console.log('--- error in commit: ', err);
+        console.log('--- error in commit: ', err, 'id = ', id, 'pending = ', this.$_pending.value);
       }
     });
 
-    this.$on(EVENT_TYPE_FLUSH_AFTER, (order, event, target) => {
+    this.$on(EVENT_TYPE_REMOVE_AFTER, (order, event, target) => {
+      target.$children.forEach((child) => {
+        child.$event(EVENT_TYPE_REMOVE_AFTER, order);
+      });
+
+      const remaining = target.$_pending.value.filter(
+        (trans) => (trans.type === EVENT_TYPE_NEXT) && (trans.order < order),
+      );
+      if (remaining.length !== this.$_pending.value.length) {
+        this.$_pending.next(remaining);
+      }
+    });
+
+    this.$on(EVENT_TYPE_ACCEPT_AFTER, (trans, event, target) => {
       if (target.$isInAction) {
         return;
       }
       target.$children.forEach((child) => {
-        child.$event(EVENT_TYPE_FLUSH_AFTER, order);
+        child.$event(EVENT_TYPE_ACCEPT_AFTER, trans.order);
       });
 
       const pendingNext = target.$_pending.value.filter(
-        (trans) => (trans.type === EVENT_TYPE_NEXT) && (trans.order >= order),
+        (tr) => (tr.type === EVENT_TYPE_NEXT) && (tr.order >= trans.order),
       );
-      const last = pendingNext.pop();
-      if (last) {
-        target.$_commitTrans(last.id);
+
+      if (pendingNext.length) {
+        const last = pendingNext.pop();
+        target.$_superNext(last.value);
       }
     });
   }
@@ -96,8 +111,8 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
     return this;
   }
 
-  $commit(id) {
-    this.$event(EVENT_TYPE_COMMIT, id);
+  $commit(trans) {
+    this.$event(EVENT_TYPE_COMMIT, trans);
   }
 
   $revert(id) {
@@ -106,14 +121,10 @@ export default (BaseClass) => (class WithTrans extends BaseClass {
 
   /**
    * commits a transaction's value to the mirror.
-   * @param id {String}
+   * @param value {any}
    */
-  $_commitTrans(id) {
-    const trans = this.$_getTrans(id);
-    this.$_removeTrans(id);
-    if (trans) {
-      super.next(trans.value);
-    }
+  $_superNext(value) {
+    super.next(value);
     return this;
   }
 

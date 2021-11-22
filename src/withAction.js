@@ -12,17 +12,20 @@ export default (BaseClass) => class WithAction extends BaseClass {
   constructor(...init) {
     super(...init);
 
-    this.$on(EVENT_TYPE_ACTION, (args, trans, t) => {
-      const { id, name } = trans;
+    this.$on(EVENT_TYPE_ACTION, (action, trans, t) => {
+      const { name, args } = action;
+     // console.log('-- event type action: args ', args, 'trans = ', trans);
       if (!t.$_actions.has(name)) {
         throw e(`no action named ${name}`);
       } else {
         t.$_addTrans(trans);
         try {
           t.$_actions.get(name)(t, ...args);
-          this.$commit(id);
+          console.log('--- done with action', name, ' --- committing trans ', action);
+          this.$commit(trans);
         } catch (err) {
-          t.$_removeTrans(id);
+          console.log('--- error with action', name, ':', err);
+          t.$_removeTrans(trans.id);
         }
       }
     });
@@ -35,34 +38,9 @@ export default (BaseClass) => class WithAction extends BaseClass {
       }, p, t) => {
         try {
           const nextValue = produce(t.value, (draft) => fn(draft, t, ...args));
-          p.next({
-            fn,
-            args,
-            nextValue,
-          });
+          t.next(nextValue);
         } catch (err) {
           p.error(err);
-        }
-      },
-    );
-
-    this.$on(
-      EVENT_TYPE_MUTATE,
-      ({
-        fn,
-        args,
-        nextValue,
-      }, p, t) => {
-        const nextEvent = t.next(nextValue);
-        if (nextEvent && nextEvent.thrownError) {
-          p.error(nextEvent.thrownError);
-        } else {
-          p.next({
-            fn,
-            args,
-            nextValue,
-            next: t.value,
-          });
         }
       },
     );
@@ -129,6 +107,7 @@ export default (BaseClass) => class WithAction extends BaseClass {
     if (this.$_actions.has(name)) {
       console.warn('overwriting existing action in mirror', this);
     }
+    console.log('adding action:', name);
     this.$_actions.set(name, fn);
   }
 
@@ -163,6 +142,7 @@ export default (BaseClass) => class WithAction extends BaseClass {
         target: this,
       });
     }
+    console.log('setting', name, value);
 
     if (this.$hasChild(name)) {
       this.$children.get(name)

@@ -1,0 +1,44 @@
+[
+  {
+    "pending": []
+  },
+  {
+    "currentValue": 4
+  },
+  {
+    "type": "next",
+    "value": 5
+  },
+  {
+    "pending": [
+      {
+        "type": "next",
+        "value": 5
+      }
+    ]
+  },
+  {
+    "type": "event:validate",
+    "value": "a"
+  },
+  {
+    "type": "event:commit",
+    "value": {
+      "type": "next",
+      "value": 5
+    }
+  },
+  {
+    "type": "event:acceptAfter",
+    "value": {
+      "type": "next",
+      "value": 5
+    }
+  },
+  {
+    "currentValue": 5
+  },
+  {
+    "pending": []
+  }
+]

@@ -130,14 +130,14 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
       super.next(nextValue);
     }
     else {
-      const {id} = this.$event(EVENT_TYPE_NEXT, nextValue);
-      this.$event(EVENT_TYPE_VALIDATE, id);
-      const currentTrans = this.$_getTrans(id);
+      const trans = this.$event(EVENT_TYPE_NEXT, nextValue);
+      this.$event(EVENT_TYPE_VALIDATE, trans.id);
+      const currentTrans = this.$_getTrans(trans.id);
       if (currentTrans && (currentTrans.errors.length > 0)) {
-        this.$revert(id);
+        this.$revert(trans.id);
         throw currentTrans.errors;
       } else {
-        this.$commit(id);
+        this.$commit(trans);
       }
     }
   }
@@ -203,7 +203,7 @@ export default class Mirror extends withAction(withChildren(withEvents(withTrans
   }
 
   $has(key) {
-    return this.$hasChild(key) || this.$keys.includes(key);
+    return this.$hasChild(key) || this.$keys().includes(key);
   }
 
   $delete(name) {

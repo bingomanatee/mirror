@@ -1,0 +1,68 @@
+[
+  {
+    "pending": []
+  },
+  {
+    "currentValue": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  {
+    "type": "event:mutate",
+    "value": {
+      "args": []
+    }
+  },
+  {
+    "type": "next",
+    "value": {
+      "x": 3,
+      "y": 0
+    }
+  },
+  {
+    "pending": [
+      {
+        "type": "next",
+        "value": {
+          "x": 3,
+          "y": 0
+        }
+      }
+    ]
+  },
+  {
+    "type": "event:validate",
+    "value": "b"
+  },
+  {
+    "type": "event:commit",
+    "value": {
+      "type": "next",
+      "value": {
+        "x": 3,
+        "y": 0
+      }
+    }
+  },
+  {
+    "type": "event:acceptAfter",
+    "value": {
+      "type": "next",
+      "value": {
+        "x": 3,
+        "y": 0
+      }
+    }
+  },
+  {
+    "currentValue": {
+      "x": 3,
+      "y": 0
+    }
+  },
+  {
+    "pending": []
+  }
+]

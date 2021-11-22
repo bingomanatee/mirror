@@ -1,8 +1,7 @@
 import tap from 'tap';
-import _ from 'lodash';
-import { map } from 'rxjs/operators';
-import watch from '../watch';
 import transWatch from '../transWatch';
+import EXPECT_TRANS_WITH_VALIDATOR from './expect/mirror-spec-trans-with-validator.json';
+import EXPECT_NEXT from './expect/mirror-spec-next.json';
 
 const p = require('../package.json');
 
@@ -19,8 +18,8 @@ const NNV = 'non-numeric value';
 
 const Subject = lib[subjectName];
 tap.test(p.name, (suite) => {
-  suite.test(`${subjectName} (Value type)`, (suiteTests) => {
-    suiteTests.test('constructor', (tConst) => {
+  suite.test(`${subjectName} (Value type)`, (subjectTests) => {
+    subjectTests.test('constructor', (tConst) => {
       tConst.test('basic value, no config', (cBasic) => {
         const m = new Subject(1);
         cBasic.equal(m.value, 1);
@@ -38,37 +37,20 @@ tap.test(p.name, (suite) => {
       tConst.end();
     });
 
-    suiteTests.test('next - trans', (tNext) => {
+    subjectTests.test('next - trans', (tNext) => {
       const m = new Subject(4, { transQueue: 'abcdefghijklmnopqrstuvwxyz'.split('') });
       const { queue } = transWatch(m);
 
       m.next(5);
 
       tNext.same(m.value, 5);
-      // console.log('queue:', JSON.stringify(queue));
+      console.log('next queue:', JSON.stringify(queue));
       tNext.same(queue,
-        [{ pending: [] }, { currentValue: 4 }, {
-          type: 'next',
-          value: 5,
-        }, {
-          pending: [{
-            type: 'next',
-            value: 5,
-          }],
-        }, {
-          type: 'event:validate',
-          value: 'a',
-        }, {
-          type: 'event:commit',
-          value: 'a',
-        }, {
-          type: 'event:flushAfter',
-          value: 0,
-        }, { pending: [] }, { currentValue: 5 }]);
+        EXPECT_NEXT);
       tNext.end();
     });
 
-    suiteTests.test('next - trans with validator', (tNext) => {
+    subjectTests.test('next - trans with validator', (tNext) => {
       const m = new Subject(4, {
         test: (n) => {
           if (typeof n !== 'number') {
@@ -91,66 +73,13 @@ tap.test(p.name, (suite) => {
       m.next(10);
 
       tNext.same(m.value, 10);
-      // console.log('queue after 10', JSON.stringify(queue));
+      console.log('queue after 10', JSON.stringify(queue));
       tNext.same(queue,
-        [{ pending: [] }, { currentValue: 4 }, {
-          type: 'next',
-          value: 5,
-        }, {
-          pending: [{
-            type: 'next',
-            value: 5,
-          }],
-        }, {
-          type: 'event:validate',
-          value: 'a',
-        }, {
-          type: 'event:commit',
-          value: 'a',
-        }, {
-          type: 'event:flushAfter',
-          value: 0,
-        }, { pending: [] }, { currentValue: 5 }, {
-          type: 'next',
-          value: 'six',
-        }, {
-          pending: [{
-            type: 'next',
-            value: 'six',
-          }],
-        }, {
-          type: 'event:validate',
-          value: 'e',
-        }, {
-          pending: [{
-            type: 'next',
-            value: 'six',
-          }],
-        }, {
-          type: 'event:revert',
-          value: 'e',
-        }, { pending: [] }, {
-          type: 'next',
-          value: 10,
-        }, {
-          pending: [{
-            type: 'next',
-            value: 10,
-          }],
-        }, {
-          type: 'event:validate',
-          value: 'h',
-        }, {
-          type: 'event:commit',
-          value: 'h',
-        }, {
-          type: 'event:flushAfter',
-          value: 7,
-        }, { pending: [] }, { currentValue: 10 }]);
+        EXPECT_TRANS_WITH_VALIDATOR);
       tNext.end();
     });
 
-    suiteTests.end();
+    subjectTests.end();
   });
 
   suite.end();
