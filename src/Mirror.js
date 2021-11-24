@@ -2,10 +2,9 @@ import { BehaviorSubject } from 'rxjs';
 import eventMixin from './eventMixin';
 import { EVENT_TYPE_NEXT } from './constants';
 
-export default class Mirror extends BehaviorSubject {
+export default class Mirror extends eventMixin(BehaviorSubject) {
   constructor(value) {
     super(value);
-    this.$_initEvents();
   }
 
   next(value) {
@@ -14,6 +13,12 @@ export default class Mirror extends BehaviorSubject {
 
   $next(value) {
     super.next(value);
+  }
+
+  getValue() {
+    const last = this.$lastChange;
+    if (last) return last.value;
+    return super.getValue();
   }
 }
 
