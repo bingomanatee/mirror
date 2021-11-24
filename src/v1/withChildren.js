@@ -28,6 +28,8 @@ export default (BaseClass) => class WithChildren extends BaseClass {
           .forEach((childValue, key) => {
             if (target.$hasChild(key)) {
               const child = target.$children.get(key);
+              console.log('sharing value ', value);
+              console.log('child value is ', childValue, 'key is ', key);
               child.$event(EVENT_TYPE_NEXT, childValue, { parent: p.id });
             }
           });
@@ -65,7 +67,7 @@ export default (BaseClass) => class WithChildren extends BaseClass {
   }
 
   get $root() {
-    return this.$parent ? this.parent.$root : this;
+    return this.$parent ? this.$parent.$root : this;
   }
 
   get $_transOrder() {

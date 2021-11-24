@@ -1,0 +1,47 @@
+[
+  {"pending": []},
+  {"currentValue": {"x": 0, "y": 0}},
+  {
+    "type": "event:action", "value": {
+    "name": "offset", "args": [
+      4,
+      7
+    ]
+  }
+  },
+  {
+    "pending": [
+      {
+        "type": "event:action", "value": {
+        "name": "offset", "args": [
+          4,
+          7
+        ]
+      }
+      }
+    ]
+  },
+  {"type": "event:mutate", "value": {"args": []}},
+  {"type": "next", "value": {"x": 0, "y": 7}},
+  {
+    "pending": [
+      {
+        "type": "event:action", "value": {
+        "name": "offset", "args": [
+          4,
+          7
+        ]
+      }
+      },
+      {"type": "next", "value": {"x": 0, "y": 7}}
+    ]
+  },
+  {"type": "event:validate", "value": "c"},
+  {
+    "pending": [
+      {"type": "next", "value": {"x": 0, "y": 7}}
+    ]
+  },
+  {"pending": []},
+  {"currentValue": {"x": 0, "y": 7}}
+]

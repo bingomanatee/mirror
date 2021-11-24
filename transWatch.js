@@ -1,5 +1,7 @@
 import { Subject } from 'rxjs';
 
+const { inspect } = require('util');
+
 function reducePending(trans) {
   try {
     const {
@@ -27,6 +29,7 @@ function reducePending(trans) {
 }
 
 export default (m) => {
+  m.$transQueue = 'abcdefghijklmnopqrstuvwxyz'.split('');
   const queue = [];
 
   m.$_pending.subscribe((list) => {
@@ -40,5 +43,14 @@ export default (m) => {
   m.$__eventQueue.subscribe((e) => queue.push(reducePending(e)));
   m.$__eventQueue.subscribe((e) => nativeEventQueue.next(e));
 
-  return { queue };
+  return {
+    queue,
+    toString() {
+      try {
+        return JSON.stringify(queue);
+      } catch (err) {
+        return inspect(queue, { depth: 20 });
+      }
+    },
+  };
 };

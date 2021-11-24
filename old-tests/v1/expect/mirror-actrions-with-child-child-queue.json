@@ -1,0 +1,20 @@
+[
+  {"pending": []},
+  {"currentValue": 0},
+  {"type": "next", "value": 4},
+  {
+    "pending": [
+      {"type": "next", "value": 4}
+    ]
+  },
+  {"type": "event:validate", "value": "a"},
+  {"type": "next", "value": 0},
+  {
+    "pending": [
+      {"type": "next", "value": 4},
+      {"type": "next", "value": 0}
+    ]
+  },
+  {"pending": []},
+  {"currentValue": 0}
+]

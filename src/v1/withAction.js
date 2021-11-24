@@ -138,6 +138,7 @@ export default (BaseClass) => class WithAction extends BaseClass {
     }
 
     if (this.$hasChild(name)) {
+      console.log('--- setting child value: ', name, value);
       this.$children.get(name)
         .next(value);
       return;
