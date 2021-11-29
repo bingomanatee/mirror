@@ -6,17 +6,25 @@ import { EVENT_TYPE_NEXT } from './constants';
 import { isArr, sortBy } from './utils';
 
 export default (BaseClass) => class WithEvents extends BaseClass {
-  get $events() {
-    return lazy(this, '$_events', (target) => {
-      const sub = new Subject();
-      sub.subscribe({
-        next(e) {
-          target.$_pushActive(e);
+  constructor(...args) {
+    super(...args);
+
+    this.$on(EVENT_TYPE_NEXT, (value, evt, target) => {
+      target.$_pushActive(evt);
+      evt.subscribe({
+        complete() {
+          target.$commit();
         },
-        error(er) {
-          //
+        error() {
+          target.$reset(evt);
         },
       });
+    });
+  }
+
+  get $events() {
+    return lazy(this, '$_events', () => {
+      const sub = new Subject();
       return sub;
     });
   }
@@ -49,28 +57,29 @@ export default (BaseClass) => class WithEvents extends BaseClass {
 
   /**
    * register an in-process action into the queue;
+   *
    * @param evt {MirrorEvent}
-   * @returns {Subscription | void | Unsubscribable | Promise<PushSubscription>}
+   * @returns {MirrorEvent}
    */
   $_pushActive(evt) {
     if (!evt || evt.isStopped) {
-      return;
+      return evt;
     }
 
     this.$_active = [...this.$_active, evt];
-    const target = this;
-    evt.$resolvers = evt.subscribe({
-      complete() {
-        if (evt.$type !== EVENT_TYPE_NEXT) {
-          target.$_removeFromActive(evt);
-        }
-        target.$commit();
-      },
-      error(er) {
-        target.$reset(evt, er);
-      },
-    });
-    return evt.$resolvers;
+    return evt;
+  }
+
+  /**
+   * returns true only if $_active has events AND they are all stopped
+   * @returns {*|boolean}
+   */
+  get $_activeHasAllStoppedEvents() {
+    return this.$_active.length && (!this.$_active.some((ev) => !ev.isStopped));
+  }
+
+  get $_activeHasErrors() {
+    return this.$_active.some((ev) => ev.hasError);
   }
 
   /**
@@ -78,22 +87,22 @@ export default (BaseClass) => class WithEvents extends BaseClass {
    * and empty $_active of all pending
    */
   $commit() {
-    if (!this.$_active.length) return;
-
-    // do not flush until all actions have been completed;
-    if (this.$_active.some((ev) => !ev.isStopped)) {
+    if (!this.$_activeHasAllStoppedEvents) {
       return;
     }
 
     // if there are no errors, advance the last change
-    if (!this.$_active.some((ev) => ev.hasError)) {
+    if (!this.$_activeHasErrors) {
       const latest = this.$lastChange;
 
       if (latest) {
         this.$next(latest.value);
       }
+    } else {
+      console.log('--- cannot clean $commit - has errors:', this.$_active.some((ev) => ev.hasError));
     }
 
+    // erase all the events in $_active
     this.$_active = [];
   }
 
@@ -104,16 +113,9 @@ export default (BaseClass) => class WithEvents extends BaseClass {
    * all the way up the chain unless one of the events is capable of
    * stopping the chain reaction
    * @param evt {MirrorEvent}
-   * @param err {Error}
    */
-  $reset(evt, err) {
-    const openEvents = this.$_active.filter((other) => !other.matches(evt) && !other.isStopped);
-    if (openEvents.length) {
-      openEvents.pop().error(err);
-    }
-    if (this.$_active.includes(evt)) {
-      this.$_removeFromActive(evt, true);
-    }
+  $reset(evt) {
+    this.$_removeFromActive(evt, true);
   }
 
   get $lastChange() {
@@ -132,29 +134,36 @@ export default (BaseClass) => class WithEvents extends BaseClass {
    *
    * @param type {scalar} the event type
    * @param value {any} the data / config of the event
-   * @param stayOpen {boolean} a flag to prevent $send from ensuring the event is completed.
-   *                           if true, the caller MUST complete the event eventually.
    * @returns {MirrorEvent}
    */
-  $send(type, value, stayOpen = false) {
+  $send(type, value) {
     const evt = new MirrorEvent(value, type, this);
     this.$events.next(evt);
-    if (!evt.isStopped && (!stayOpen)) {
-      evt.complete();
-    }
     return evt;
   }
 
+  /**
+   *
+   * @param type {scalar}
+   * @param handler {function}
+   * @returns {Subscription | void | Unsubscribable | Promise<PushSubscription>}
+   */
   $on(type, handler) {
-    return this.$events.pipe(filter((e) => e.$type === type))
+    const target = this;
+    return this.$events.pipe(filter((e) => {
+      const sameType = e.$type === type;
+      // console.log('$on: test = ', type, 'event = ', e.value, '/', e.$type, 'result =', sameType);
+      return sameType;
+    }))
       .subscribe({
         next(e) {
           if (e.isStopped) {
             return;
           }
           try {
-            handler(e);
+            handler(e.value, e, target);
           } catch (err) {
+            console.log('--- error on handler: ', err);
             if (!e.isStopped) {
               e.error(err);
             }

@@ -26,7 +26,7 @@ tap.test(p.name, (suite) => {
       const mir = new Subject(1);
 
       const values = [];
-      mir.$on('alpha', (e) => values.push(e.value));
+      mir.$on('alpha', (v, e) => values.push(v));
 
       mir.$send('alpha', 1);
       mir.$send('beta', 2);

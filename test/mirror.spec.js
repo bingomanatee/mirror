@@ -7,23 +7,49 @@ const lib = require('../lib');
 
 const Subject = lib[subjectName];
 tap.test(p.name, (suite) => {
-  suite.test(`${subjectName}`, (eventTests) => {
-    eventTests.test('next', (evTest) => {
+  suite.test(`${subjectName}`, (mirTests) => {
+    mirTests.test('next', (nxTests) => {
       const mir = new Subject(1);
 
       const values = [];
       mir.subscribe((value) => values.push(value));
 
-      evTest.same(values, [1]);
+      nxTests.same(values, [1]);
 
       mir.next(2);
       mir.next(3);
-      evTest.same(values, [1, 2, 3]);
 
-      evTest.end();
+      nxTests.same(values, [1, 2, 3]);
+
+      nxTests.end();
     });
 
-    eventTests.end();
+    mirTests.test('with validation', (valTest) => {
+      const mir = new Subject(1, {
+        test: (val) => ((typeof val === 'number') ? null : 'not a number'),
+      });
+
+      const values = [];
+      mir.subscribe((value) => values.push(value));
+
+      mir.next(2);
+      let thrown = null;
+      try {
+        mir.next('three');
+      } catch (er) {
+        console.log('--- thrown:', er);
+        thrown = er;
+      }
+      valTest.same(thrown, 'not a number');
+
+      mir.next(4);
+
+      valTest.same(values, [1, 2, 4]);
+
+      valTest.end();
+    });
+
+    mirTests.end();
   });
 
   suite.end();
