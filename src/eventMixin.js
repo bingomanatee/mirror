@@ -12,9 +12,6 @@ export default (BaseClass) => class WithEvents extends BaseClass {
     this.$on(EVENT_TYPE_NEXT, (value, evt, target) => {
       target.$_pushActive(evt);
       evt.subscribe({
-        complete() {
-          target.$commit();
-        },
         error() {
           target.$reset(evt);
         },
@@ -134,11 +131,15 @@ export default (BaseClass) => class WithEvents extends BaseClass {
    *
    * @param type {scalar} the event type
    * @param value {any} the data / config of the event
+   * @param isComplete {boolean} whether to force the event to complete
    * @returns {MirrorEvent}
    */
-  $send(type, value) {
+  $send(type, value, forceComplete = false) {
     const evt = new MirrorEvent(value, type, this);
     this.$events.next(evt);
+    if (forceComplete && !(evt.isStopped)) {
+      evt.complete();
+    }
     return evt;
   }
 

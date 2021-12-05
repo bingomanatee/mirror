@@ -1,5 +1,9 @@
 import { ABSENT, NAME_UNNAMED } from '../constants';
 
+const isNum = require('lodash/isNumber');
+
+export const isNumber = isNum;
+
 export function isThere(item) {
   return ![ABSENT, NAME_UNNAMED, undefined].includes(item);
 }
@@ -82,4 +86,9 @@ export function toObj(m, force = false) {
   }
 
   return out;
+}
+
+export function isWhole(value) {
+  if (!isNumber(value)) return false;
+  return (value >= 0) && !(value % 2);
 }

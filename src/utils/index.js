@@ -5,10 +5,16 @@ import lGet from 'lodash/get';
 import sortBy from 'lodash/sortBy';
 import lazy from './lazy';
 
-const isNumber = require('lodash/isNumber');
-
 export * from './tests';
 
+function asImmer(value) {
+  try {
+    return produce(value, (draft) => draft);
+  } catch (err) {
+    return value;
+  }
+}
+
 export {
-  lazy, produce, isEqual, uniq, lGet, sortBy, isNumber,
+  lazy, produce, isEqual, uniq, lGet, sortBy, asImmer,
 };

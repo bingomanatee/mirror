@@ -2,12 +2,13 @@ import { BehaviorSubject } from 'rxjs';
 import eventMixin from './eventMixin';
 import actionMixin from './actionMixin';
 import { EVENT_TYPE_NEXT } from './constants';
-import { isObj, isFn } from './utils';
+import { isObj, isFn, asImmer } from './utils';
+import propsMixin from './propsMixin';
 
-export default class Mirror extends actionMixin(eventMixin(BehaviorSubject)) {
+export default class Mirror extends propsMixin(actionMixin(eventMixin(BehaviorSubject))) {
   constructor(value, config) {
-    super(value, config);
-    config && this.$_config(config);
+    super(asImmer(value), config);
+    this.$_config(config);
   }
 
   $_config(config) {
@@ -23,13 +24,12 @@ export default class Mirror extends actionMixin(eventMixin(BehaviorSubject)) {
   }
 
   next(value) {
-    const evt = this.$send(EVENT_TYPE_NEXT, value);
-    if (!evt.isStopped) {
-      evt.complete();
-    }
+    const evt = this.$send(EVENT_TYPE_NEXT, value, true);
+
     if (evt.hasError) {
       throw evt.thrownError;
     }
+    this.$commit();
   }
 
   $addTest(handler) {

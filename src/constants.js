@@ -1,6 +1,7 @@
 export const TYPE_MAP = Symbol('type:map');
 export const TYPE_OBJECT = Symbol('type:object');
 export const TYPE_VALUE = Symbol('type:value');
+export const TYPE_ARRAY = Symbol('type:array');
 
 export const NAME_UNNAMED = Symbol('unnamed');
 
@@ -9,6 +10,7 @@ export const ABSENT = Symbol('ABSENT');
 export const CHILDREN = Symbol('CHILDREN');
 
 export const EVENT_TYPE_NEXT = 'next';
+export const EVENT_TYPE_SET = 'set';
 export const EVENT_TYPE_SHARD = 'next:shard';
 export const EVENT_TYPE_TRY = 'try';
 export const EVENT_TYPE_ACCEPT_AFTER = 'event:acceptAfter';
