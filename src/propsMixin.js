@@ -6,7 +6,7 @@ import {
   EVENT_TYPE_ACTION, EVENT_TYPE_NEXT, EVENT_TYPE_SET, TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT, TYPE_VALUE,
 } from './constants';
 import {
-  isArr, isMap, isObj, isWhole, produce,
+  isArr, isMap, isObj, isWhole, produce, typeOfValue,
 } from './utils';
 
 export default (BaseClass) => class WithProps extends BaseClass {
@@ -67,17 +67,7 @@ export default (BaseClass) => class WithProps extends BaseClass {
 
   get $type() {
     const value = this.getValue();
-    let type = TYPE_VALUE;
-    if (isMap(value)) {
-      type = TYPE_MAP;
-    }
-    if (isArr(value)) {
-      type = TYPE_ARRAY;
-    }
-    if (isObj(value)) {
-      type = TYPE_OBJECT;
-    }
-    return type;
+    return typeOfValue(value);
   }
 
   $set(key, value) {

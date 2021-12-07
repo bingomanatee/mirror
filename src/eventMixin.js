@@ -2,8 +2,12 @@ import { Subject } from 'rxjs';
 import { map, share, filter } from 'rxjs/operators';
 import lazy from './utils/lazy';
 import MirrorEvent from './MirrorEvent';
-import { EVENT_TYPE_NEXT } from './constants';
-import { isArr, sortBy } from './utils';
+import {
+  ABSENT, EVENT_TYPE_NEXT, TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT,
+} from './constants';
+import {
+  isArr, compact, typeOfValue, lGet, produce,
+} from './utils';
 
 export default (BaseClass) => class WithEvents extends BaseClass {
   constructor(...args) {
@@ -28,6 +32,13 @@ export default (BaseClass) => class WithEvents extends BaseClass {
 
   get $_active() {
     return lazy(this, '$__active', () => []);
+  }
+
+  get $_allActive() {
+    if (this.$parent) {
+      return compact([...this.$parent.$_allActive, this.$_active]);
+    }
+    return this.$_active;
   }
 
   set $_active(list) {
@@ -72,7 +83,8 @@ export default (BaseClass) => class WithEvents extends BaseClass {
    * @returns {*|boolean}
    */
   get $_activeHasAllStoppedEvents() {
-    return this.$_active.length && (!this.$_active.some((ev) => !ev.isStopped));
+    const active = this.$_allActive;
+    return active.length && (!active.some((ev) => !ev.isStopped));
   }
 
   get $_activeHasErrors() {

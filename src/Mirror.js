@@ -4,8 +4,9 @@ import actionMixin from './actionMixin';
 import { EVENT_TYPE_NEXT } from './constants';
 import { isObj, isFn, asImmer } from './utils';
 import propsMixin from './propsMixin';
+import childMixin from './childMixin';
 
-export default class Mirror extends propsMixin(actionMixin(eventMixin(BehaviorSubject))) {
+export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin(BehaviorSubject)))) {
   constructor(value, config) {
     super(asImmer(value), config);
     this.$_config(config);

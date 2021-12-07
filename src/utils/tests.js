@@ -1,4 +1,6 @@
-import { ABSENT, NAME_UNNAMED } from '../constants';
+import {
+  ABSENT, NAME_UNNAMED, TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT, TYPE_VALUE,
+} from '../constants';
 
 const isNum = require('lodash/isNumber');
 
@@ -86,6 +88,85 @@ export function toObj(m, force = false) {
   }
 
   return out;
+}
+
+export function typeOfValue(value) {
+  let type = TYPE_VALUE;
+  if (isMap(value)) {
+    type = TYPE_MAP;
+  }
+  if (isArr(value)) {
+    type = TYPE_ARRAY;
+  }
+  if (isObj(value)) {
+    type = TYPE_OBJECT;
+  }
+  return type;
+}
+
+export function hasKey(value, key, vType = null) {
+  if (!vType) {
+    vType = typeOfValue(value);
+  }
+
+  let isInValue = false;
+  switch (vType) {
+    case TYPE_VALUE:
+      isInValue = false;
+      break;
+
+    case TYPE_OBJECT:
+      isInValue = (key in value);
+      break;
+
+    case TYPE_MAP:
+      isInValue = value.has(key);
+      break;
+
+    case TYPE_ARRAY:
+      // eslint-disable-next-line no-use-before-define
+      if ((!isArr(value)) || isWhole(key)) {
+        isInValue = false;
+      } else {
+        isInValue = key < value.length;
+      }
+      break;
+
+    default:
+      isInValue = false;
+  }
+
+  return isInValue;
+}
+export function getKey(value, key, vType = null) {
+  if (!vType) {
+    vType = typeOfValue(value);
+  }
+
+  let childValue = null;
+
+  switch (vType) {
+    case TYPE_VALUE:
+      childValue = null;
+      break;
+
+    case TYPE_OBJECT:
+      childValue = value[key];
+      break;
+
+    case TYPE_MAP:
+      childValue = value.get(key);
+      break;
+
+    case TYPE_ARRAY:
+      childValue = value[key];
+      break;
+
+    default:
+      childValue = null;
+  }
+
+  return childValue;
 }
 
 export function isWhole(value) {
