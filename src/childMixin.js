@@ -42,7 +42,10 @@ export default (BaseClass) => class WithChildren extends BaseClass {
   }
 
   get $children() {
-    return lazy(this, '$_children', () => (new Map()));
+    if (!this.$_children) {
+      this.$_children = new Map();
+    }
+    return this.$_children;
   }
 
   get $_hasChildren() {

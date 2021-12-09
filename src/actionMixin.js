@@ -2,7 +2,7 @@ import { Subject } from 'rxjs';
 import { map, share, filter } from 'rxjs/operators';
 import lazy from './utils/lazy';
 import MirrorEvent from './MirrorEvent';
-import { EVENT_TYPE_ACCEPT_AFTER, EVENT_TYPE_ACTION, EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_AFTER } from './constants';
+import { EVENT_TYPE_ACCEPT_FROM, EVENT_TYPE_ACTION, EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_FROM } from './constants';
 import { isArr, isObj, sortBy } from './utils';
 
 function makeDoProxy(target) {
@@ -34,10 +34,10 @@ export default (BaseClass) => class WithActions extends BaseClass {
         target.$_pushActive(evt);
         evt.subscribe({
           error() {
-            target.$send(EVENT_TYPE_REMOVE_AFTER, evt.$order);
+            target.$send(EVENT_TYPE_REMOVE_FROM, evt.$order);
           },
           complete() {
-            target.$send(EVENT_TYPE_ACCEPT_AFTER, evt.$order);
+            target.$send(EVENT_TYPE_ACCEPT_FROM, evt.$order);
           },
         });
         try {
@@ -50,7 +50,10 @@ export default (BaseClass) => class WithActions extends BaseClass {
   }
 
   get $_actions() {
-    return lazy(this, '$__actions', () => new Map());
+    if (!this.$__actions) {
+      this.$__actions = new Map();
+    }
+    return this.$__actions;
   }
 
   get $isInAction() {
@@ -70,7 +73,10 @@ export default (BaseClass) => class WithActions extends BaseClass {
   }
 
   get $do() {
-    return lazy(this, '$_do', makeDoProxy);
+    if (!this.$_do) {
+      this.$_do = makeDoProxy(this);
+    }
+    return this.$_do;
   }
 
   $_configActions(config) {

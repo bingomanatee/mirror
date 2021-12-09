@@ -3,7 +3,7 @@ import eventMixin from './eventMixin';
 import actionMixin from './actionMixin';
 import idGen from './idGen';
 import {
-  EVENT_TYPE_ACCEPT_AFTER, EVENT_TYPE_DEBUG, EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_AFTER,
+  EVENT_TYPE_ACCEPT_FROM, EVENT_TYPE_DEBUG, EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_FROM,
 } from './constants';
 import {
   isObj, isFn, asImmer, isStr,
@@ -57,7 +57,7 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
     const evt = this.$send(EVENT_TYPE_NEXT, value, true);
     let errors = this.$_activeErrors;
     if (errors.length) {
-      this.$root.$send(EVENT_TYPE_REMOVE_AFTER, evt.$order, true);
+      this.$root.$send(EVENT_TYPE_REMOVE_FROM, evt.$order, true);
       if (errors.length === 1) {
         // eslint-disable-next-line prefer-destructuring
         errors = errors[0];
@@ -73,7 +73,7 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
         active: this.$_allActive.map((e) => ({ ...e })),
       });
     }
-    this.$root.$send(EVENT_TYPE_ACCEPT_AFTER, evt.$order);
+    this.$root.$send(EVENT_TYPE_ACCEPT_FROM, evt.$order);
   }
 
   $addTest(handler) {

@@ -3,9 +3,9 @@ import { filter } from 'rxjs/operators';
 import lazy from './utils/lazy';
 import MirrorEvent from './MirrorEvent';
 import {
-  EVENT_TYPE_ACCEPT_AFTER, EVENT_TYPE_ACTION, EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_AFTER,
+  EVENT_TYPE_ACCEPT_FROM, EVENT_TYPE_ACTION, EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_FROM,
 } from './constants';
-import { compact, isArr } from './utils';
+import { compact, isArr, isNumber } from './utils';
 
 export default (BaseClass) => class WithEvents extends BaseClass {
   constructor(...args) {
@@ -15,26 +15,23 @@ export default (BaseClass) => class WithEvents extends BaseClass {
       target.$_pushActive(evt);
     });
 
-    this.$on(EVENT_TYPE_REMOVE_AFTER, (order, event, target) => {
+    this.$on(EVENT_TYPE_REMOVE_FROM, (order, event, target) => {
       target.$children.forEach((child) => {
-        child.$send(EVENT_TYPE_REMOVE_AFTER, order, true);
+        child.$send(EVENT_TYPE_REMOVE_FROM, order, true);
       });
 
-      const remaining = target.$_active.filter(
-        (trans) => (trans.order < order),
-      );
-      if (remaining.length !== this.$_active.length) {
-        this.$_active = remaining;
-      }
+      target.$_removeFromActive(order, true);
     });
 
-    this.$on(EVENT_TYPE_ACCEPT_AFTER, (order, event, target) => {
+    this.$on(EVENT_TYPE_ACCEPT_FROM, (order, event, target) => {
       const actions = target.$_allActive;
       const inAction = actions.find((otherEvt) => otherEvt.$type === EVENT_TYPE_ACTION && otherEvt.$isBefore(order));
-      if (inAction) return;
+      if (inAction) {
+        return;
+      }
 
       target.$children.forEach((child) => {
-        child.$send(EVENT_TYPE_ACCEPT_AFTER, order);
+        child.$send(EVENT_TYPE_ACCEPT_FROM, order);
       });
 
       const last = target.$lastChange;
@@ -43,24 +40,22 @@ export default (BaseClass) => class WithEvents extends BaseClass {
         target.$next(last.value);
       }
 
-      const remaining = target.$_active.filter(
-        (trans) => (trans.order < order),
-      );
-      if (remaining.length !== this.$_active.length) {
-        this.$_active = remaining;
-      }
+      target.$_removeFromActive(order, true);
     });
   }
 
   get $events() {
-    return lazy(this, '$_events', () => {
-      const sub = new Subject();
-      return sub;
-    });
+    if (!this.$_events) {
+      this.$_events = new Subject();
+    }
+    return this.$_events;
   }
 
   get $_active() {
-    return lazy(this, '$__active', () => []);
+    if (!this.$__active) {
+      this.$__active = [];
+    }
+    return this.$__active;
   }
 
   get $_allActive() {
@@ -97,11 +92,22 @@ export default (BaseClass) => class WithEvents extends BaseClass {
 
   /**
    * removes an event from the Active array
-   * @param evt {MirrorEvent}
+   * @param evt {MirrorEvent|Number}
    * @param removeAfter {boolean}
    */
   $_removeFromActive(evt, removeAfter = false) {
-    this.$_active = this.$_active.filter((other) => !other.matches(evt) || (removeAfter && other.$isBefore(evt)));
+    let active = [...this.$_active];
+
+    if (removeAfter) {
+      active = active.filter((other) => other.$isBefore(evt));
+    } else if (isNumber(evt)) {
+      active = active.filter((other) => other.$order !== evt);
+    } else {
+      active = active.filter((other) => !other.matches(evt));
+    }
+    if (active.length !== this.$_active.length) {
+      this.$_active = active;
+    }
   }
 
   /**
@@ -133,7 +139,8 @@ export default (BaseClass) => class WithEvents extends BaseClass {
   }
 
   get $_activeErrors() {
-    return this.$_allActive.filter((ev) => ev.hasError).map((ev) => ev.thrownError);
+    return this.$_allActive.filter((ev) => ev.hasError)
+      .map((ev) => ev.thrownError);
   }
 
   /**
@@ -153,7 +160,7 @@ export default (BaseClass) => class WithEvents extends BaseClass {
     if (!this.$_activeHasErrors) {
       const change = evt || this.$lastChange;
       if (change) {
-        this.$send(EVENT_TYPE_ACCEPT_AFTER, change.$order, true);
+        this.$send(EVENT_TYPE_ACCEPT_FROM, change.$order, true);
       }
     } else {
       console.log('--- cannot clean $commit - has errors:', this.$_active.some((ev) => ev.hasError));

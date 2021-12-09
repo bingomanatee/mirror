@@ -5,8 +5,11 @@
  * @param creator {function}
  */
 export default function lazy(target, name, creator) {
-  if (!(name in target)) {
-    target[name] = creator(target, name);
-  }
-  return target[name];
+  const value = creator(target, name);
+
+  Object.defineProperty(target, name, {
+    value,
+  });
+
+  return value;
 }
