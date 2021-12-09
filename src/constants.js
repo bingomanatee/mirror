@@ -11,6 +11,7 @@ export const CHILDREN = Symbol('CHILDREN');
 
 export const EVENT_TYPE_NEXT = 'next';
 export const EVENT_TYPE_SET = 'set';
+export const EVENT_TYPE_DEBUG = 'debug';
 export const EVENT_TYPE_SHARD = 'next:shard';
 export const EVENT_TYPE_TRY = 'try';
 export const EVENT_TYPE_ACCEPT_AFTER = 'event:acceptAfter';

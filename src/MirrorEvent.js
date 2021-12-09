@@ -34,4 +34,14 @@ export default class MirrorEvent extends BehaviorSubject {
     }
     return false;
   }
+
+  $isBefore(other) {
+    if (isNumber(other)) {
+      return this.$order < other;
+    }
+    if (other instanceof MirrorEvent) {
+      return this.$isBefore(other.$order);
+    }
+    return false;
+  }
 }

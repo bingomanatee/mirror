@@ -1,13 +1,11 @@
 import { Subject } from 'rxjs';
-import { map, share, filter } from 'rxjs/operators';
+import { filter } from 'rxjs/operators';
 import lazy from './utils/lazy';
 import MirrorEvent from './MirrorEvent';
 import {
-  ABSENT, EVENT_TYPE_NEXT, TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT,
+  EVENT_TYPE_ACCEPT_AFTER, EVENT_TYPE_ACTION, EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_AFTER,
 } from './constants';
-import {
-  isArr, compact, typeOfValue, lGet, produce,
-} from './utils';
+import { compact, isArr } from './utils';
 
 export default (BaseClass) => class WithEvents extends BaseClass {
   constructor(...args) {
@@ -15,11 +13,42 @@ export default (BaseClass) => class WithEvents extends BaseClass {
 
     this.$on(EVENT_TYPE_NEXT, (value, evt, target) => {
       target.$_pushActive(evt);
-      evt.subscribe({
-        error() {
-          target.$reset(evt);
-        },
+    });
+
+    this.$on(EVENT_TYPE_REMOVE_AFTER, (order, event, target) => {
+      target.$children.forEach((child) => {
+        child.$send(EVENT_TYPE_REMOVE_AFTER, order, true);
       });
+
+      const remaining = target.$_active.filter(
+        (trans) => (trans.order < order),
+      );
+      if (remaining.length !== this.$_active.length) {
+        this.$_active = remaining;
+      }
+    });
+
+    this.$on(EVENT_TYPE_ACCEPT_AFTER, (order, event, target) => {
+      const actions = target.$_allActive;
+      const inAction = actions.find((otherEvt) => otherEvt.$type === EVENT_TYPE_ACTION && otherEvt.$isBefore(order));
+      if (inAction) return;
+
+      target.$children.forEach((child) => {
+        child.$send(EVENT_TYPE_ACCEPT_AFTER, order);
+      });
+
+      const last = target.$lastChange;
+
+      if (last && !last.$isBefore(order)) {
+        target.$next(last.value);
+      }
+
+      const remaining = target.$_active.filter(
+        (trans) => (trans.order < order),
+      );
+      if (remaining.length !== this.$_active.length) {
+        this.$_active = remaining;
+      }
     });
   }
 
@@ -36,9 +65,25 @@ export default (BaseClass) => class WithEvents extends BaseClass {
 
   get $_allActive() {
     if (this.$parent) {
-      return compact([...this.$parent.$_allActive, this.$_active]);
+      return this.$root.$_downActive;
     }
-    return this.$_active;
+    let active = [...this.$_active];
+    if (this.$_hasChildren) {
+      this.$children.forEach((child) => {
+        active = compact([...active, ...child.$_downActive]);
+      });
+    }
+    return active;
+  }
+
+  get $_downActive() {
+    let active = [...this.$_active];
+    if (this.$_hasChildren) {
+      this.$children.forEach((child) => {
+        active = compact([...active, ...child.$_downActive]);
+      });
+    }
+    return active;
   }
 
   set $_active(list) {
@@ -51,16 +96,12 @@ export default (BaseClass) => class WithEvents extends BaseClass {
   }
 
   /**
-   * removes an event from the Active array,
-   * and commits it
+   * removes an event from the Active array
    * @param evt {MirrorEvent}
+   * @param removeAfter {boolean}
    */
   $_removeFromActive(evt, removeAfter = false) {
-    const otherActive = this.$_active.filter((other) => !other.matches(evt) || (removeAfter && other.$isAfter(evt)));
-    // if there are other non-change, non-complete actions in the queue
-    // do NOT automatically dequeue a completed change.
-
-    this.$_active = otherActive;
+    this.$_active = this.$_active.filter((other) => !other.matches(evt) || (removeAfter && other.$isBefore(evt)));
   }
 
   /**
@@ -88,31 +129,35 @@ export default (BaseClass) => class WithEvents extends BaseClass {
   }
 
   get $_activeHasErrors() {
-    return this.$_active.some((ev) => ev.hasError);
+    return this.$_allActive.some((ev) => ev.hasError);
+  }
+
+  get $_activeErrors() {
+    return this.$_allActive.filter((ev) => ev.hasError).map((ev) => ev.thrownError);
   }
 
   /**
    * record completed values into the mirrors' value
    * and empty $_active of all pending
+   * @param evt {MirrorEvent}
    */
-  $commit() {
+  $commit(evt) {
+    // const debug = this.$name === 'betaField';
     if (!this.$_activeHasAllStoppedEvents) {
+      const active = this.$_allActive.filter((e) => !e.isStopped);
+      console.log('not committing', this, ': still active = ', active);
       return;
     }
 
     // if there are no errors, advance the last change
     if (!this.$_activeHasErrors) {
-      const latest = this.$lastChange;
-
-      if (latest) {
-        this.$next(latest.value);
+      const change = evt || this.$lastChange;
+      if (change) {
+        this.$send(EVENT_TYPE_ACCEPT_AFTER, change.$order, true);
       }
     } else {
       console.log('--- cannot clean $commit - has errors:', this.$_active.some((ev) => ev.hasError));
     }
-
-    // erase all the events in $_active
-    this.$_active = [];
   }
 
   /**

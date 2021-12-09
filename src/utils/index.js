@@ -6,6 +6,7 @@ import sortBy from 'lodash/sortBy';
 import compact from 'lodash/compact';
 import lazy from './lazy';
 
+export * from './childUtils';
 export * from './tests';
 
 function asImmer(value) {

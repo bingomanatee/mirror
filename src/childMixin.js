@@ -2,13 +2,14 @@ import { Subject } from 'rxjs';
 import { map, share, filter } from 'rxjs/operators';
 import lazy from './utils/lazy';
 import {
+  ABSENT,
   EVENT_TYPE_ACTION, EVENT_TYPE_NEXT, TYPE_MAP, TYPE_OBJECT,
 } from './constants';
 import {
-  isArr, isObj, sortBy, typeOfValue, hasKey, getKey,
+  isArr, isObj, sortBy, typeOfValue, hasKey, getKey, setKey, produce,
 } from './utils';
 
-export default (BaseClass) => class WithChildern extends BaseClass {
+export default (BaseClass) => class WithChildren extends BaseClass {
   constructor(value, config, ...args) {
     super(value, config, ...args);
 
@@ -24,10 +25,20 @@ export default (BaseClass) => class WithChildern extends BaseClass {
       target.$children.forEach((child, key) => {
         if (hasKey(value, key, valueType)) {
           const childValue = getKey(value, key, valueType);
+          target.$note('sending child value:', { key, childValue });
           child.$send(EVENT_TYPE_NEXT, childValue, true);
+        } else {
+          target.$note('not updating child ', { key });
         }
       });
     });
+  }
+
+  get $root() {
+    if (this.$parent) {
+      return this.$parent.$root;
+    }
+    return this;
   }
 
   get $children() {
@@ -40,7 +51,30 @@ export default (BaseClass) => class WithChildern extends BaseClass {
 
   $addChild(key, child) {
     child.$parent = this;
+    child.$name = key;
     this.$children.set(key, child);
+  }
+
+  $_withChildValues(value = ABSENT) {
+    if (value === ABSENT) {
+      value = this._value;
+    }
+
+    const type = typeOfValue(value);
+
+    if (this.$_hasChildren) {
+      this.$children.forEach((child, key) => {
+        const childValue = child.value;
+
+        if (getKey(value, key, type) !== childValue) {
+          value = produce(value, (draft) => {
+            setKey(draft, key, childValue, type);
+          });
+        }
+      });
+    }
+
+    return value;
   }
 
   $_configChildren(config) {

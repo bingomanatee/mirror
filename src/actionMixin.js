@@ -2,7 +2,7 @@ import { Subject } from 'rxjs';
 import { map, share, filter } from 'rxjs/operators';
 import lazy from './utils/lazy';
 import MirrorEvent from './MirrorEvent';
-import { EVENT_TYPE_ACTION, EVENT_TYPE_NEXT } from './constants';
+import { EVENT_TYPE_ACCEPT_AFTER, EVENT_TYPE_ACTION, EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_AFTER } from './constants';
 import { isArr, isObj, sortBy } from './utils';
 
 function makeDoProxy(target) {
@@ -24,8 +24,8 @@ function makeDoProxy(target) {
 }
 
 export default (BaseClass) => class WithActions extends BaseClass {
-  constructor(value, config, ...args) {
-    super(value, config, ...args);
+  constructor(value, config, ...rest) {
+    super(value, config, ...rest);
 
     config && this.$_configActions(config);
 
@@ -34,10 +34,10 @@ export default (BaseClass) => class WithActions extends BaseClass {
         target.$_pushActive(evt);
         evt.subscribe({
           error() {
-            target.$revert(evt);
+            target.$send(EVENT_TYPE_REMOVE_AFTER, evt.$order);
           },
           complete() {
-            target.$commit();
+            target.$send(EVENT_TYPE_ACCEPT_AFTER, evt.$order);
           },
         });
         try {
@@ -51,6 +51,11 @@ export default (BaseClass) => class WithActions extends BaseClass {
 
   get $_actions() {
     return lazy(this, '$__actions', () => new Map());
+  }
+
+  get $isInAction() {
+    const action = this.$_allActive.find(({ type, committed }) => (!committed) && (type === EVENT_TYPE_ACTION));
+    return !!action;
   }
 
   $addAction(name, fn) {

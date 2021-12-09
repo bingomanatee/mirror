@@ -1,5 +1,7 @@
 import tap from 'tap';
+import watchAll from '../watchAll';
 
+const { inspect } = require('util');
 const p = require('../package.json');
 
 const subjectName = 'Mirror';
@@ -37,7 +39,6 @@ tap.test(p.name, (suite) => {
       try {
         mir.next('three');
       } catch (er) {
-        console.log('--- thrown:', er);
         thrown = er;
       }
       valTest.same(thrown, 'not a number');

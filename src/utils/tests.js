@@ -138,36 +138,6 @@ export function hasKey(value, key, vType = null) {
 
   return isInValue;
 }
-export function getKey(value, key, vType = null) {
-  if (!vType) {
-    vType = typeOfValue(value);
-  }
-
-  let childValue = null;
-
-  switch (vType) {
-    case TYPE_VALUE:
-      childValue = null;
-      break;
-
-    case TYPE_OBJECT:
-      childValue = value[key];
-      break;
-
-    case TYPE_MAP:
-      childValue = value.get(key);
-      break;
-
-    case TYPE_ARRAY:
-      childValue = value[key];
-      break;
-
-    default:
-      childValue = null;
-  }
-
-  return childValue;
-}
 
 export function isWhole(value) {
   if (!isNumber(value)) return false;
