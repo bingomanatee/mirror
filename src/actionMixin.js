@@ -2,14 +2,28 @@ import { Subject } from 'rxjs';
 import { map, share, filter } from 'rxjs/operators';
 import lazy from './utils/lazy';
 import MirrorEvent from './MirrorEvent';
-import { EVENT_TYPE_ACCEPT_FROM, EVENT_TYPE_ACTION, EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_FROM } from './constants';
+import {
+  EVENT_TYPE_ACCEPT_FROM, EVENT_TYPE_ACTION, EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_FROM,
+} from './constants';
 import { isArr, isObj, sortBy } from './utils';
+
+function makeDoObj(target) {
+  const obj = {};
+  target.$_actions.forEach((fn, name) => {
+    try {
+      obj[name] = fn;
+    } catch (e) {
+
+    }
+  });
+  return obj;
+}
 
 function makeDoProxy(target) {
   if (target.$_doProxy) return target.$_doProxy;
-  // if (typeof Proxy === 'undefined') {
-  //   return makeDoObj(target);
-  // }
+  if (typeof Proxy === 'undefined') {
+    return makeDoObj(target);
+  }
 
   return new Proxy(target, {
     get(proxyTarget, name) {
@@ -63,6 +77,9 @@ export default (BaseClass) => class WithActions extends BaseClass {
 
   $addAction(name, fn) {
     this.$_actions.set(name, (...args) => this.$act(fn, args));
+    if (typeof Proxy === 'undefined') {
+      delete this.$_do;
+    }
   }
 
   $act(fn, args) {
