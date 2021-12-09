@@ -48,10 +48,10 @@ export default (BaseClass) => class WithActions extends BaseClass {
         target.$_pushActive(evt);
         evt.subscribe({
           error() {
-            target.$send(EVENT_TYPE_REMOVE_FROM, evt.$order);
+            target.$root.$send(EVENT_TYPE_REMOVE_FROM, evt.$order);
           },
           complete() {
-            target.$send(EVENT_TYPE_ACCEPT_FROM, evt.$order);
+            target.$root.$send(EVENT_TYPE_ACCEPT_FROM, evt.$order);
           },
         });
         try {
@@ -83,10 +83,7 @@ export default (BaseClass) => class WithActions extends BaseClass {
   }
 
   $act(fn, args) {
-    const evt = this.$send(EVENT_TYPE_ACTION, { fn, args });
-    if (!evt.isStopped) {
-      evt.complete();
-    }
+    return this.$send(EVENT_TYPE_ACTION, { fn, args }, true);
   }
 
   get $do() {
