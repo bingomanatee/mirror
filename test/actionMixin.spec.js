@@ -40,6 +40,23 @@ tap.test(p.name, (suite) => {
 
       bf.end();
     });
+
+    actionTests.test('key setter', (ks) => {
+      const values = [];
+
+      const mir = new Subject({ x: 1, y: 2 }, {
+
+      });
+      mir.subscribe((v) => values.push(v));
+
+      mir.$do.setX(5);
+      mir.$do.setY(12);
+
+      ks.same(mir.value, { x: 5, y: 12 });
+      ks.same(values, [{ x: 1, y: 2 }, { x: 5, y: 2 }, { x: 5, y: 12 }]);
+      ks.end();
+    });
+
     actionTests.test('multi update action', (bf) => {
       const values = [];
       const pend = [];

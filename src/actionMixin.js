@@ -3,9 +3,18 @@ import { map, share, filter } from 'rxjs/operators';
 import lazy from './utils/lazy';
 import MirrorEvent from './MirrorEvent';
 import {
-  EVENT_TYPE_ACCEPT_FROM, EVENT_TYPE_ACTION, EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_FROM,
+  EVENT_TYPE_ACCEPT_FROM,
+  EVENT_TYPE_ACTION,
+  EVENT_TYPE_NEXT,
+  EVENT_TYPE_REMOVE_FROM,
+  EVENT_TYPE_SET,
+  SET_RE, TYPE_ARRAY, TYPE_MAP,
+  TYPE_OBJECT,
 } from './constants';
-import { isArr, isObj, sortBy } from './utils';
+import {
+  isArr, isObj, isStr, isWhole, sortBy,
+} from './utils';
+import { ucFirst } from '../v1/utils';
 
 function makeDoObj(target) {
   const obj = {};
@@ -16,11 +25,32 @@ function makeDoObj(target) {
 
     }
   });
+
+  switch (target.$type) {
+    case TYPE_OBJECT:
+      Object.keys(target.value)
+        .forEach((key) => {
+          const setKey = `set${ucFirst(key)}`;
+          obj[setKey] = (value) => target.$set(key, value);
+        });
+      break;
+
+    case TYPE_MAP:
+      target.value.keys()
+        .forEach((key) => {
+          const setKey = `set${ucFirst(key)}`;
+          obj[setKey] = (value) => target.$set(key, value);
+        });
+      break;
+  }
+
   return obj;
 }
 
 function makeDoProxy(target) {
-  if (target.$_doProxy) return target.$_doProxy;
+  if (target.$_doProxy) {
+    return target.$_doProxy;
+  }
   if (typeof Proxy === 'undefined') {
     return makeDoObj(target);
   }
@@ -30,6 +60,17 @@ function makeDoProxy(target) {
       if (proxyTarget.$_actions.has(name)) {
         return proxyTarget.$_actions.get(name);
       }
+
+      if (isStr(name)) {
+        const match = name.match(SET_RE);
+        if (match) {
+          const [_whole, key] = match;
+          if (proxyTarget.$keyFor(key)) {
+            return (value) => proxyTarget.$set(key, value);
+          }
+        }
+      }
+
       return () => {
         throw new Error(`no action named ${name}`);
       };
@@ -46,14 +87,7 @@ export default (BaseClass) => class WithActions extends BaseClass {
     this.$on(EVENT_TYPE_ACTION, ({ fn, args }, evt, target) => {
       if (!evt.isStopped) {
         target.$_pushActive(evt);
-        evt.subscribe({
-          error() {
-            target.$root.$send(EVENT_TYPE_REMOVE_FROM, evt.$order);
-          },
-          complete() {
-            target.$root.$send(EVENT_TYPE_ACCEPT_FROM, evt.$order);
-          },
-        });
+
         try {
           fn(target, ...args);
         } catch (err) {
@@ -83,7 +117,16 @@ export default (BaseClass) => class WithActions extends BaseClass {
   }
 
   $act(fn, args) {
-    return this.$send(EVENT_TYPE_ACTION, { fn, args }, true);
+    const evt = this.$send(EVENT_TYPE_ACTION, {
+      fn,
+      args,
+    }, true);
+    if (evt.hasError) {
+      this.$root.$send(EVENT_TYPE_REMOVE_FROM, evt.$order);
+      throw evt.thrownError;
+    } else {
+      this.$root.$send(EVENT_TYPE_ACCEPT_FROM, evt.$order);
+    }
   }
 
   get $do() {
@@ -101,9 +144,10 @@ export default (BaseClass) => class WithActions extends BaseClass {
     const { actions } = config;
 
     if (isObj(actions)) {
-      Object.keys(actions).forEach((name) => {
-        this.$addAction(name, actions[name]);
-      });
+      Object.keys(actions)
+        .forEach((name) => {
+          this.$addAction(name, actions[name]);
+        });
     }
   }
 };

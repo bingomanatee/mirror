@@ -117,10 +117,6 @@ export default (BaseClass) => class WithEvents extends BaseClass {
    * @returns {MirrorEvent}
    */
   $_pushActive(evt) {
-    if (!evt || evt.isStopped) {
-      return evt;
-    }
-
     this.$_active = [...this.$_active, evt];
     return evt;
   }
@@ -141,42 +137,6 @@ export default (BaseClass) => class WithEvents extends BaseClass {
   get $_activeErrors() {
     return this.$_allActive.filter((ev) => ev.hasError)
       .map((ev) => ev.thrownError);
-  }
-
-  /**
-   * record completed values into the mirrors' value
-   * and empty $_active of all pending
-   * @param evt {MirrorEvent}
-   */
-  $commit(evt) {
-    // const debug = this.$name === 'betaField';
-    if (!this.$_activeHasAllStoppedEvents) {
-      const active = this.$_allActive.filter((e) => !e.isStopped);
-      console.log('not committing', this, ': still active = ', active);
-      return;
-    }
-
-    // if there are no errors, advance the last change
-    if (!this.$_activeHasErrors) {
-      const change = evt || this.$lastChange;
-      if (change) {
-        this.$send(EVENT_TYPE_ACCEPT_FROM, change.$order, true);
-      }
-    } else {
-      console.log('--- cannot clean $commit - has errors:', this.$_active.some((ev) => ev.hasError));
-    }
-  }
-
-  /**
-   * on an event failure, flush the active events of the event
-   * and any event after it. Also, force any open events to fail which
-   * will ultimately clear all events and triggers the side effects of that
-   * all the way up the chain unless one of the events is capable of
-   * stopping the chain reaction
-   * @param evt {MirrorEvent}
-   */
-  $reset(evt) {
-    this.$_removeFromActive(evt, true);
   }
 
   get $lastChange() {
