@@ -16,6 +16,8 @@ export const EVENT_TYPE_DEBUG = 'debug';
 export const EVENT_TYPE_ACCEPT_FROM = 'event:acceptFrom';
 export const EVENT_TYPE_REMOVE_FROM = 'event:removeFrom';
 
+export const EVENT_TYPE_FLUSH_ACTIVE = 'event:commit';
 export const EVENT_TYPE_ACTION = 'event:action';
 export const EVENT_TYPE_MUTATE = 'event:mutate';
+export const EVENT_TYPE_VALIDATE = 'event:validate';
 export const SET_RE = /^set(.+)$/i;

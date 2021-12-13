@@ -3,7 +3,7 @@ import eventMixin from './eventMixin';
 import actionMixin from './actionMixin';
 import idGen from './idGen';
 import {
-  EVENT_TYPE_ACCEPT_FROM, EVENT_TYPE_DEBUG, EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_FROM,
+  EVENT_TYPE_FLUSH_ACTIVE, EVENT_TYPE_DEBUG, EVENT_TYPE_NEXT, EVENT_TYPE_VALIDATE,
 } from './constants';
 import {
   isObj, isFn, asImmer, isStr,
@@ -22,21 +22,23 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
       return;
     }
 
-    const { test, name, debug } = config;
+    const {
+      test,
+      name,
+      debug = false,
+    } = config;
 
     if (isFn(test)) {
       this.$addTest(test);
     }
-    if (isStr(name, true)) {
-      this.$name = name;
-    } else {
-      this.$name = idGen();
-    }
+    this.$name = isStr(name, true) ? name : idGen();
     this.$_debug = debug;
   }
 
   get $debug() {
-    if (this.$_debug) return true;
+    if (this.$_debug) {
+      return true;
+    }
     if (this.$parent) {
       return this.$parent.$debug;
     }
@@ -45,6 +47,9 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
 
   $note(msg, value = null) {
     if (this.$debug) {
+      if (this.$debug > 1) {
+        console.log('target: ', this.$name, msg, value);
+      }
       this.$send(EVENT_TYPE_DEBUG, {
         msg,
         target: this.$name,
@@ -54,49 +59,43 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
   }
 
   next(value) {
-    const evt = this.$send(EVENT_TYPE_NEXT, value, true);
-    let errors = this.$_activeErrors;
-    if (errors.length) {
-      this.$root.$send(EVENT_TYPE_REMOVE_FROM, evt.$order, true);
-      if (errors.length === 1) {
-        // eslint-disable-next-line prefer-destructuring
-        errors = errors[0];
-      }
-      this.$note('--- next; has errors', {
-        value,
-        active: this.$_allActive.map((e) => ({ ...e })),
-      });
-      throw errors;
-    } else {
-      this.$note('--- next: no errors', {
-        value,
-        active: this.$_allActive.map((e) => ({ ...e })),
-      });
+    const evt = this.$send(EVENT_TYPE_NEXT, value);
+
+    if (!evt.isStopped) {
+      this.$root.$send(EVENT_TYPE_VALIDATE, evt);
     }
-    this.$root.$send(EVENT_TYPE_ACCEPT_FROM, evt.$order);
+    if (!evt.isStopped) {
+      evt.complete();
+    }
+
+    this.$send(EVENT_TYPE_FLUSH_ACTIVE, evt, true);
+    if (evt.hasError) {
+      throw evt.thrownError;
+    }
   }
 
   $addTest(handler) {
-    return this.$on(EVENT_TYPE_NEXT, (value, evt, tgt) => {
-      tgt.$note('testing', {
-        value,
-        handler,
-        target: tgt.$name,
-      });
+    return this.$on(EVENT_TYPE_VALIDATE, (srcEvt, evt, tgt) => {
+      if (!srcEvt.isStopped) {
+        const value = tgt.getValue();
 
-      let err = null;
-      try {
-        err = handler(value, tgt);
-      } catch (er) {
-        err = er;
-      }
-      if (err) {
-        if (evt.isStopped) {
-          tgt.$note('error -- throwing', { err, target: tgt.$name });
-          throw err;
+        let err = null;
+        try {
+          err = handler(value, tgt);
+        } catch (er) {
+          err = er;
         }
-        tgt.$note('error -- to event', { err, target: tgt.$name });
-        evt.error(err);
+
+        if (err) {
+          tgt.$note('error -- to event', {
+            err,
+            target: tgt.$name,
+          });
+          srcEvt.error({
+            target: tgt.$name,
+            error: err,
+          });
+        }
       }
     });
   }

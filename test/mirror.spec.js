@@ -27,7 +27,9 @@ tap.test(p.name, (suite) => {
     });
 
     mirTests.test('with validation', (valTest) => {
+      console.log('---- with validation');
       const mir = new Subject(1, {
+        name: 'root',
         test: (val) => ((typeof val === 'number') ? null : 'not a number'),
       });
 
@@ -41,7 +43,7 @@ tap.test(p.name, (suite) => {
       } catch (er) {
         thrown = er;
       }
-      valTest.same(thrown, 'not a number');
+      valTest.same(thrown, { target: 'root', error: 'not a number' });
 
       mir.next(4);
 

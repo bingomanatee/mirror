@@ -10,6 +10,11 @@ export function isThere(item) {
   return ![ABSENT, NAME_UNNAMED, undefined].includes(item);
 }
 
+export function ucFirst(str) {
+  if (!isStr(str, true)) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 /**
  * returns true if the object is a POJO object -- that is,
  * its non-null, is an instance of Object, and is not an array.

@@ -49,7 +49,7 @@ tap.test(p.name, (suite) => {
       } catch (e) {
         err = e;
       }
-      bs.same(err, NAN);
+      bs.same(err, { error: NAN, target: 'alphaField' });
       // console.log('--- basic set -- error:', inspect(allHistory, { depth: 5 }));
       bs.same(history, [{ alphaField: 0, betaField: 0 }, { alphaField: 2, betaField: 4 }]);
       bs.same(m.value.alphaField, 2);

@@ -11,6 +11,13 @@ export default class MirrorEvent extends BehaviorSubject {
     this.$id = idGen();
     this.$order = order;
     order += 1;
+    this.subscribe({
+      error(err) { // as elements of the error system of V8 of Rxjs are changing,
+        // re-implementing them here.
+        this.hasError = true;
+        this.thrownError = err;
+      },
+    });
   }
 
   /**

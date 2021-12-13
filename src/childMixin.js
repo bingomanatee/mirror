@@ -3,7 +3,7 @@ import { map, share, filter } from 'rxjs/operators';
 import lazy from './utils/lazy';
 import {
   ABSENT,
-  EVENT_TYPE_ACTION, EVENT_TYPE_NEXT, TYPE_MAP, TYPE_OBJECT,
+  EVENT_TYPE_ACTION, EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_FROM, TYPE_MAP, TYPE_OBJECT,
 } from './constants';
 import {
   isArr, isObj, sortBy, typeOfValue, hasKey, getKey, setKey, produce,
@@ -23,10 +23,18 @@ export default (BaseClass) => class WithChildren extends BaseClass {
       const valueType = typeOfValue(value);
 
       target.$children.forEach((child, key) => {
+        if (evt.hasError) return;
         if (hasKey(value, key, valueType)) {
           const childValue = getKey(value, key, valueType);
           target.$note('sending child value:', { key, childValue });
-          child.$send(EVENT_TYPE_NEXT, childValue, true);
+          const childEvt = child.$send(EVENT_TYPE_NEXT, childValue, true);
+          if (childEvt.hasError) {
+            evt.error({
+              error: childEvt.thrownError,
+              target: key,
+            });
+            child.$send(EVENT_TYPE_REMOVE_FROM, childEvt.$order);
+          }
         } else {
           target.$note('not updating child ', { key });
         }

@@ -3,7 +3,12 @@ import { filter } from 'rxjs/operators';
 import lazy from './utils/lazy';
 import MirrorEvent from './MirrorEvent';
 import {
-  EVENT_TYPE_ACCEPT_FROM, EVENT_TYPE_ACTION, EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_FROM,
+  EVENT_TYPE_ACCEPT_FROM,
+  EVENT_TYPE_ACTION,
+  EVENT_TYPE_FLUSH_ACTIVE,
+  EVENT_TYPE_NEXT,
+  EVENT_TYPE_REMOVE_FROM,
+  EVENT_TYPE_VALIDATE,
 } from './constants';
 import { compact, isArr, isNumber } from './utils';
 
@@ -13,6 +18,24 @@ export default (BaseClass) => class WithEvents extends BaseClass {
 
     this.$on(EVENT_TYPE_NEXT, (value, evt, target) => {
       target.$_pushActive(evt);
+    });
+
+    this.$on(EVENT_TYPE_VALIDATE, (srcEvt, evt, target) => {
+      if ((!evt.hasError) && target.$_hasChildren) {
+        target.$children.forEach((child) => {
+          if (!evt.hasError) {
+            child.$send(EVENT_TYPE_VALIDATE, srcEvt);
+          }
+        });
+      }
+    });
+
+    this.$on(EVENT_TYPE_FLUSH_ACTIVE, (evt, commitEvt, target) => {
+      if (evt.hasError) {
+        target.$root.$send(EVENT_TYPE_REMOVE_FROM, evt.$order, true);
+        commitEvt.error(evt.thrownError);
+      }
+      target.$root.$send(EVENT_TYPE_ACCEPT_FROM, evt.$order);
     });
 
     this.$on(EVENT_TYPE_REMOVE_FROM, (order, event, target) => {
@@ -121,22 +144,8 @@ export default (BaseClass) => class WithEvents extends BaseClass {
     return evt;
   }
 
-  /**
-   * returns true only if $_active has events AND they are all stopped
-   * @returns {*|boolean}
-   */
-  get $_activeHasAllStoppedEvents() {
-    const active = this.$_allActive;
-    return active.length && (!active.some((ev) => !ev.isStopped));
-  }
-
-  get $_activeHasErrors() {
-    return this.$_allActive.some((ev) => ev.hasError);
-  }
-
   get $_activeErrors() {
-    return this.$_allActive.filter((ev) => ev.hasError)
-      .map((ev) => ev.thrownError);
+    return this.$_allActive.filter((ev) => ev.hasError);
   }
 
   get $lastChange() {
