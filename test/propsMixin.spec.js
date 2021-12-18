@@ -22,6 +22,29 @@ tap.test(p.name, (suite) => {
       bs.end();
     });
 
+    propsTests.test('selectors', (sel) => {
+      sel.test('basic', (selB) => {
+        const m = new Subject({ x: 1, y: 2 }, {
+          name: 'point',
+          selectors: {
+            mag(value) {
+              return Math.sqrt(value.x ** 2 + value.y ** 2);
+            },
+          },
+        });
+
+        selB.same(m.value.mag, Math.sqrt(5));
+
+        m.$do.setX(10);
+
+        selB.same(m.value.mag, Math.sqrt(104));
+
+        selB.end();
+      });
+
+      sel.end();
+    });
+
     propsTests.end();
   });
 

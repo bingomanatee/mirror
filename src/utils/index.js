@@ -8,6 +8,7 @@ import lazy from './lazy';
 
 export * from './childUtils';
 export * from './tests';
+export * from './conversion';
 
 function asImmer(value) {
   try {

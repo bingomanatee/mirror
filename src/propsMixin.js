@@ -1,12 +1,8 @@
-import { Subject } from 'rxjs';
-import { map, share, filter } from 'rxjs/operators';
-import lazy from './utils/lazy';
-import MirrorEvent from './MirrorEvent';
 import {
-  EVENT_TYPE_ACTION, EVENT_TYPE_NEXT, EVENT_TYPE_SET, TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT, TYPE_VALUE,
+  EVENT_TYPE_SET, TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT,
 } from './constants';
 import {
-  isArr, isMap, isObj, isWhole, produce, typeOfValue,
+  toMap, isObj, isWhole, produce, typeOfValue, isFn, isStr,
 } from './utils';
 
 export default (BaseClass) => class WithProps extends BaseClass {
@@ -54,6 +50,10 @@ export default (BaseClass) => class WithProps extends BaseClass {
         },
       });
     });
+
+    if (this.$_hasSelectors) {
+      this.next(this.$_withSelectors(this.value));
+    }
   }
 
   $_configProps(config) {
@@ -61,8 +61,16 @@ export default (BaseClass) => class WithProps extends BaseClass {
       return;
     }
 
-    const { fixed } = config;
+    const { fixed, selectors } = config;
     this.$isFixed = !!fixed;
+
+    if (selectors) {
+      toMap(selectors).forEach((fn, name) => {
+        if (isFn(fn) && isStr(name, true)) {
+          this.$addSelector(name, fn);
+        }
+      });
+    }
   }
 
   get $type() {
@@ -145,5 +153,53 @@ export default (BaseClass) => class WithProps extends BaseClass {
     }
 
     return out;
+  }
+
+  $addSelector(name, fn) {
+    this.$_selectors.set(name, fn);
+  }
+
+  get $_selectors() {
+    if (!this.$__selectors) {
+      this.$__selectors = new Map();
+    }
+
+    return this.$__selectors;
+  }
+
+  get $_hasSelectors() {
+    return this.$__selectors && this.$__selectors.size > 0;
+  }
+
+  $_withSelectors(value) {
+    if (!this.$_hasSelectors) return value;
+    const target = this;
+    const valueType = typeOfValue(value);
+    const withSel = produce(value, (draft) => {
+      target.$_selectors.forEach((fn, name) => {
+        try {
+          const selValue = fn(value, target, name);
+          switch (valueType) {
+            case TYPE_MAP:
+              draft.set(name, selValue);
+              break;
+
+            case TYPE_OBJECT:
+              draft[name] = selValue;
+              break;
+
+            case TYPE_ARRAY:
+              draft[name] = selValue;
+            default:
+              // no set
+          }
+        } catch (err) {
+          console.warn('cannot compute ', name, ':', err);
+        }
+      });
+    });
+
+    console.log('with selector: ', withSel);
+    return withSel;
   }
 };

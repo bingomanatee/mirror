@@ -1,6 +1,5 @@
 import { SET_RE, TYPE_MAP, TYPE_OBJECT } from './constants';
-import { ucFirst } from './utils';
-import { isStr } from './utils';
+import { ucFirst, isStr } from './utils';
 
 function makeDoObj(target) {
   const obj = {};

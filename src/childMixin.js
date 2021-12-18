@@ -1,12 +1,9 @@
-import { Subject } from 'rxjs';
-import { map, share, filter } from 'rxjs/operators';
-import lazy from './utils/lazy';
 import {
   ABSENT,
-  EVENT_TYPE_ACTION, EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_FROM, TYPE_MAP, TYPE_OBJECT,
+  EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_FROM, TYPE_MAP, TYPE_OBJECT,
 } from './constants';
 import {
-  isArr, isObj, sortBy, typeOfValue, hasKey, getKey, setKey, produce,
+  isObj, typeOfValue, hasKey, getKey, setKey, produce, isEqual,
 } from './utils';
 
 export default (BaseClass) => class WithChildren extends BaseClass {
@@ -27,6 +24,7 @@ export default (BaseClass) => class WithChildren extends BaseClass {
         if (hasKey(value, key, valueType)) {
           const childValue = getKey(value, key, valueType);
           target.$note('sending child value:', { key, childValue });
+          if (child.value === childValue || isEqual(child.value, childValue)) return;
           const childEvt = child.$send(EVENT_TYPE_NEXT, childValue, true);
           if (childEvt.hasError) {
             evt.error({

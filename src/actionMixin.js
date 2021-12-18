@@ -1,7 +1,7 @@
 import {
   EVENT_TYPE_ACCEPT_FROM, EVENT_TYPE_ACTION, EVENT_TYPE_FLUSH_ACTIVE, EVENT_TYPE_REMOVE_FROM,
 } from './constants';
-import { isObj } from './utils';
+import { isFn, isObj } from './utils';
 import { makeDoProxy } from './mirrorMisc';
 
 export default (BaseClass) => class WithActions extends BaseClass {
@@ -71,5 +71,13 @@ export default (BaseClass) => class WithActions extends BaseClass {
           this.$addAction(name, actions[name]);
         });
     }
+  }
+
+  $mutate(fn) {
+    if (!isFn(fn)) {
+      throw new Error('$mutate expects function');
+    }
+
+    this.next(fn(this.value, this));
   }
 };
