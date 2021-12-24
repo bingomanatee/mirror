@@ -20,11 +20,18 @@ export default (BaseClass) => class WithChildren extends BaseClass {
       const valueType = typeOfValue(value);
 
       target.$children.forEach((child, key) => {
-        if (evt.hasError) return;
+        if (evt.hasError) {
+          return;
+        }
         if (hasKey(value, key, valueType)) {
           const childValue = getKey(value, key, valueType);
-          target.$note('sending child value:', { key, childValue });
-          if (child.value === childValue || isEqual(child.value, childValue)) return;
+          target.$note('sending child value:', {
+            key,
+            childValue,
+          });
+          if (child.value === childValue || isEqual(child.value, childValue)) {
+            return;
+          }
           const childEvt = child.$send(EVENT_TYPE_NEXT, childValue, true);
           if (childEvt.hasError) {
             evt.error({
@@ -57,17 +64,6 @@ export default (BaseClass) => class WithChildren extends BaseClass {
   get $_hasChildren() {
     return !!this.$_children && this.$children.size;
   }
-  
-  $get(key, value = ABSENT) {
-    if (value === ABSENT) value = this.value;
-    switch(typeOfValue(value)) {
-      case TYPE_ARRAY: 
-        return value[key];
-        break;
-      case TYPE_MAP:
-        return value.get(key);
-    }
-  }
 
   $addChild(key, child) {
     child.$parent = this;
@@ -76,10 +72,22 @@ export default (BaseClass) => class WithChildren extends BaseClass {
     this.$children.set(key, child);
     child.subscribe({
       next(value) {
-        if (target.$lastValue) {
-          
+        if (target.$lastChange) {
+          const lastValueChildValue = getKey(target.$lastChange.value, key);
+          if (lastValueChildValue !== value) {
+            target.$lastChange._value = produce(target.$lastChange.value, (draft) => {
+              setKey(draft, key, value);
+            });
+          }
+        } else {
+          const lastValueChildValue = getKey(target.value, key);
+          if (lastValueChildValue !== value) {
+            target.next(produce(target.value, (draft) => {
+              setKey(draft, key, value);
+            }));
+          }
         }
-      }
+      },
     });
   }
 
@@ -116,10 +124,11 @@ export default (BaseClass) => class WithChildren extends BaseClass {
       switch (typeOfValue(children)) {
         case TYPE_OBJECT:
 
-          Object.keys(children).forEach((key) => {
-            const child = children[key];
-            this.$addChild(key, child);
-          });
+          Object.keys(children)
+            .forEach((key) => {
+              const child = children[key];
+              this.$addChild(key, child);
+            });
 
           break;
 

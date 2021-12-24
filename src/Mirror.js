@@ -72,7 +72,7 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
       }
 
       if (this.$_hasSelectors) {
-        evt._value = this.$_withSelectors(this.value);
+        evt._value = this.$_withSelectors(evt.value);
       }
 
       this.$root.$send(EVENT_TYPE_VALIDATE, evt);

@@ -19,7 +19,7 @@ function testNum(value) {
 }
 
 tap.test(p.name, (suite) => {
-  suite.test(`${subjectName}/props`, (childTests) => {
+  suite.test(`${subjectName}/children`, (childTests) => {
     childTests.test('basic set', (bs) => {
       const m = new Subject({
         alphaField: 0, betaField: 0,
@@ -60,6 +60,28 @@ tap.test(p.name, (suite) => {
       bs.same(m.value.alphaField, 10);
       bs.same(m.value.betaField, 20);
       bs.end();
+    });
+
+    childTests.test('root updates when child changed', (cc) => {
+      const m = new Subject({
+        alphaField: 0, betaField: 0,
+      }, {
+        name: 'ROOT',
+        debug: true,
+        children: {
+          alphaField: new Subject(0, { test: testNum }),
+          betaField: new Subject(0, { test: testNum }),
+        },
+      });
+
+      const [{ history }] = watch(m);
+
+      const [{ history: allHistory }] = watchAll(m);
+
+      m.$children.get('alphaField').next(20);
+
+      cc.same(m.value.alphaField, 20);
+      cc.end();
     });
 
     childTests.end();
