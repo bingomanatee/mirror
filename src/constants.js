@@ -21,3 +21,8 @@ export const EVENT_TYPE_ACTION = 'event:action';
 export const EVENT_TYPE_MUTATE = 'event:mutate';
 export const EVENT_TYPE_VALIDATE = 'event:validate';
 export const SET_RE = /^set(.+)$/i;
+
+export const MIRROR_EVENT_STATE_ACTIVE = 'mirror-event-state:active';
+export const MIRROR_EVENT_STATE_ERROR = 'mirror-state:error';
+export const MIRROR_EVENT_STATE_STOPPED = 'mirror-state:stopped';
+export const MIRROR_EVENT_STATE_COMPLETE = 'mirror-state:stopped';

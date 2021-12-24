@@ -11,46 +11,6 @@ export default (BaseClass) => class WithProps extends BaseClass {
 
     this.$_configProps(config);
 
-    this.$on(EVENT_TYPE_SET, ({ key, value, allowNew = false }, evt, target) => {
-      const myKey = target.$keyFor(key);
-      if ((!allowNew) && (!myKey)) {
-        evt.error(`bad key ${key}`);
-        return;
-      }
-
-      evt.subscribe({
-        complete() {
-          let next = target.value;
-          switch (target.$type) {
-            case TYPE_OBJECT:
-              next = produce(next, (draft) => {
-                draft[myKey] = value;
-              });
-              break;
-
-            case TYPE_MAP:
-              next = produce(next, (draft) => {
-                draft.set(myKey, value);
-              });
-              break;
-
-            case TYPE_ARRAY:
-              next = produce(next, (draft) => {
-                draft[myKey] = value;
-              });
-              break;
-
-            default:
-              throw new Error('$set is not appropriate for this type of target');
-          }
-          target.next(next);
-        },
-        error() {
-          // no action
-        },
-      });
-    });
-
     if (this.$_hasSelectors) {
       this.next(this.$_withSelectors(this.value));
     }
@@ -79,35 +39,32 @@ export default (BaseClass) => class WithProps extends BaseClass {
   }
 
   $set(key, value) {
+    const myKey = this.$keyFor(key);
+
+    let next = this.value;
     switch (this.$type) {
       case TYPE_OBJECT:
-        this.$send(EVENT_TYPE_SET, {
-          key,
-          value,
-        }, true);
+        next = produce(next, (draft) => {
+          draft[myKey] = value;
+        });
         break;
 
       case TYPE_MAP:
-        this.$send(EVENT_TYPE_SET, {
-          key,
-          value,
-        }, true);
+        next = produce(next, (draft) => {
+          draft.set(myKey, value);
+        });
         break;
 
       case TYPE_ARRAY:
-        if (isWhole(key)) {
-          this.$send({
-            key,
-            value,
-          }, true);
-        } else {
-          throw new Error('bad key for array');
-        }
+        next = produce(next, (draft) => {
+          draft[myKey] = value;
+        });
         break;
 
       default:
         throw new Error('$set is not appropriate for this type of target');
     }
+    this.next(next);
   }
 
   $keyFor(key) {

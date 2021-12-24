@@ -1,6 +1,6 @@
 import {
   ABSENT,
-  EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_FROM, TYPE_MAP, TYPE_OBJECT,
+  EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_FROM, TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT,
 } from './constants';
 import {
   isObj, typeOfValue, hasKey, getKey, setKey, produce, isEqual,
@@ -57,11 +57,30 @@ export default (BaseClass) => class WithChildren extends BaseClass {
   get $_hasChildren() {
     return !!this.$_children && this.$children.size;
   }
+  
+  $get(key, value = ABSENT) {
+    if (value === ABSENT) value = this.value;
+    switch(typeOfValue(value)) {
+      case TYPE_ARRAY: 
+        return value[key];
+        break;
+      case TYPE_MAP:
+        return value.get(key);
+    }
+  }
 
   $addChild(key, child) {
     child.$parent = this;
     child.$name = key;
+    const target = this;
     this.$children.set(key, child);
+    child.subscribe({
+      next(value) {
+        if (target.$lastValue) {
+          
+        }
+      }
+    });
   }
 
   $_withChildValues(value = ABSENT) {

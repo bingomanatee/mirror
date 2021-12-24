@@ -3,7 +3,10 @@ import eventMixin from './eventMixin';
 import actionMixin from './actionMixin';
 import idGen from './idGen';
 import {
-  EVENT_TYPE_FLUSH_ACTIVE, EVENT_TYPE_DEBUG, EVENT_TYPE_NEXT, EVENT_TYPE_VALIDATE,
+  EVENT_TYPE_FLUSH_ACTIVE,
+  EVENT_TYPE_DEBUG,
+  EVENT_TYPE_NEXT,
+  EVENT_TYPE_VALIDATE,
 } from './constants';
 import {
   isObj, isFn, asImmer, isStr,
@@ -61,13 +64,20 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
   next(value) {
     const evt = this.$send(EVENT_TYPE_NEXT, value);
 
-    if (!evt.isStopped && this.$_hasSelectors) {
-      evt.next(this.$_withSelectors(this.value));
-    }
-
     if (!evt.isStopped) {
+      if (this.$_hasChildren) {
+        if (this.$_hasChildren) {
+          evt._value = this.$_withChildValues(value);
+        }
+      }
+
+      if (this.$_hasSelectors) {
+        evt._value = this.$_withSelectors(this.value);
+      }
+
       this.$root.$send(EVENT_TYPE_VALIDATE, evt);
     }
+
     if (!evt.isStopped) {
       evt.complete();
     }
@@ -109,12 +119,11 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
   }
 
   getValue() {
-    const last = this.$lastChange;
-    const value = last ? last.value : super.getValue();
-    if (this.$_hasChildren) {
-      return this.$_withChildValues(value);
+    if (this.$lastChange) {
+      return this.$_withChildValues(this.$lastChange.value);
     }
-    return value;
+
+    return super.getValue();
   }
 }
 

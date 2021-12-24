@@ -164,7 +164,7 @@ export default (BaseClass) => class WithEvents extends BaseClass {
    *
    * @param type {scalar} the event type
    * @param value {any} the data / config of the event
-   * @param isComplete {boolean} whether to force the event to complete
+   * @param forceComplete {boolean}
    * @returns {MirrorEvent}
    */
   $send(type, value, forceComplete = false) {
@@ -191,15 +191,14 @@ export default (BaseClass) => class WithEvents extends BaseClass {
     }))
       .subscribe({
         next(e) {
-          if (e.isStopped) {
-            return;
-          }
-          try {
-            handler(e.value, e, target);
-          } catch (err) {
-            console.log('--- error on handler: ', err);
-            if (!e.isStopped) {
-              e.error(err);
+          if (!e.isStopped) {
+            try {
+              handler(e.value, e, target);
+            } catch (err) {
+              console.log('--- error on handler: ', err);
+              if (!e.isStopped) {
+                e.error(err);
+              }
             }
           }
         },
