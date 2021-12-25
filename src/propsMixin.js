@@ -34,8 +34,7 @@ export default (BaseClass) => class WithProps extends BaseClass {
   }
 
   get $type() {
-    const value = this.getValue();
-    return typeOfValue(value);
+    return typeOfValue(this.getValue());
   }
 
   $set(key, value) {
@@ -156,7 +155,6 @@ export default (BaseClass) => class WithProps extends BaseClass {
       });
     });
 
-    console.log('with selector: ', withSel);
     return withSel;
   }
 };

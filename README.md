@@ -7,8 +7,8 @@ and is decidedly ***NOT ready for use in production***
 
 ## Mirrors
 
-Mirrors are nestable BehaviorSubjects; they can trace a single value of any type,
-or a nested series of child values in Map or Object format. 
+A Mirror is a subscribable change engine; it has value(s), built-in and custom change actions, can be subscribed to 
+to receive updates.
 
 A Mirror is designed to allow validation -- that is -- invalid formats are banned from submission and 
 do not trigger subscriber notifications (or crash the subject). 
@@ -19,45 +19,86 @@ validated before subscription notifications occur.
 
 Mirrors follow the following mandates; they are:
 
-* **synchronous** -- all updates happen inline, allowing for immediate post-inspection
+* **synchronous** -- all updates happen inline, allowing for immediate inspection of the curent value, even during an action
 * **structured** -- you can define strict schema for mirrors and mirror fields, rejecting bad values.
-* **observable** -- Mirrors are and follow the RXJS patterns of Observation; in fact, they are BehaviorSubjects.
 * **testable** -- as an object with testable properties, they can easily be tested free from any view scaffolding. 
-* **independent** -- because they don't bind themselves to any one view framework, they can be used and are future proofed against any changes in client systems.
+* **independent** -- Mirrors are not bound to any particular rendering framework (React, Vue, Angular) and can be used with all of them.
+* **transactional** -- changes that trigger validation errors redact themselves and throw, without notifying subscribers of bad data. 
+* **self-contained** -- unlike Redux and all similar patterns, the definition of a Mirror is contained entirely inside its definition.
 
 These traits allow for a strong, managed state experience in any context from React to Angular and even 
-node, bare-metal design or any other context. 
+node, bare-metal design or any other context.
 
-### Mirror type
+## Subscriptions 
 
-A Mirror infers type based on its initial value. If it's a collection type (TYPE_MAP or TYPE_OBJECT)
-it allows for child keyed values to be managed by child sub-mirrors; so you can create trees of mirrors
-to produce and manage complex types. note - even in collections children are _optional_ - 
-you can store collections wholly within the root value, you just have the ability 
-to manage them through child mirrors as well. 
+Getting updates from a Mirror follows the standard observable pattern: 
 
-TYPE_VALUE mirrors have no children - the value of the Mirror is a single item,
-with zero assumptions as to what it is (even undefined; dates; class instances; dom nodes or whatever).
+```javascript
+const myMirror = new Mirror(3);
+const sub = myMirror.subscribe((value) => {
+  console.log('update: ', value);
+});
+// 'update: 3'
 
-Currently, variations include:
+myMiror.next(4);
+// 'update: 4';
 
-* TYPE_MAP: A Map based collection
-* TYPE_OBJECT: a pojo object
-* TYPE_VALUE: a single item
+sub.unsubscribe();
+myMirror.next(5);
+// [no update]
 
-note - type affects whether the Mirror is a single value manipulator or whether children are tracked
-as child Mirrors. With explicit configurations any value -- including objects or Map instances --
-can be treated as a Value. 
+````
 
-### Validation
+more formally you can `subscribe({next(value) {...}}`.
 
-The short version-if you include a {test: (nextValue) => error(s) || false} configuration
-in your mirror, it will silently reject values that emit/return errors from the test function
+note, subscriptions are cancellable; this is important for situations where the mirrors; lifespan is longer
+than the lifespan of the observation. 
 
-every time a Mirror's value is updated (via next(nextValue)), 
-an event queue allows for its $test function to be ran on the pending value. 
-If that function (exists and) returns / throws errors, 
-then the submitted value is silently rejected and no observed notification occurs. 
+### Validation tests
+
+Validation tests are designed to reject bad candidates for change. "Bad" can mean wrong type, but can also
+relate to other properties of the mirror or external factors. 
+
+```javascript
+
+const numeric = new Mirror(
+  {
+    number: 0,
+    min: -5,
+    max: 5,
+  },
+  {
+    name: 'safe-number',
+    test(next, mirror) {
+      const { number } = next;
+      if (typeof number !== 'number') return 'not a number';
+      if (number > mirror.value.max) return `must be <= ${mirror.value.max}`;
+      if (number < mirror.value.min) return `must be >= ${mirror.value.min}`;
+    },
+  },
+);
+
+numeric.$do.setNumber(4);
+console.log('value: ', numeric.value.number); // 'value: 4'
+let e = null;
+try {
+  numeric.$do.setNumber(6);
+} catch (err) {
+  console.log('error: ', err); // 'error:  { target: 'safe-number', error: 'must be <= 5' }';
+  e = err;
+}
+
+numeric.$do.setNumber(2);
+console.log('value: ', numeric.value.number); // 'value: 2'
+
+```
+
+If your mirror has one (or more) tests, it will reject values that emit/return errors from the test function.
+
+Every time a Mirror's value is submitted (via next(nextValue)), the update event queue 
+polls any errors returned/thrown from any test present in the mirror.  
+If that function (exists and) returns / throws errors, then the submitted value is silently rejected 
+and no observed notification occurs. 
 
 If the next value contains keys of managed children, those children are passed trial values
 and tested. Any errors in a pending child value are treated as errors in the root and 
@@ -67,26 +108,199 @@ If the child values are good, they are committed, notifying any direct subscribe
 then the parent is committed, notifying its subscribers of their updates. 
 
 This careful cycle allows for fine-grained control of values and minimizes the possibility
-of vad values leaking through the system; "bad" is about more than base type (string, array, etc);
-it is also about any business logic lockins (range, character count) you wish to enforce. 
+of bad values leaking through the system; "bad" is about more than base type (string, array, etc);
+it is also about any business logic (range, character count) you wish to enforce.
 
-### Immer and Mirror
+Validation can be used to enforce type on field values; it can also be used to enforce larger business 
+logic concerns. 
 
-The value of a TYPE_OBJECT or TYPE_MAP is made immutable via Immer. 
-
-### Additive updating
-
-Like setState in (old school) React, for collections, 
-next(nextValue) adds or updates keys. There is no way to next() - update values and end up
-with an object/map with fewer keys than you used to have. 
-Any value sent through next to a collection changes the subset of keys present in it, in the value,
-or updates the $children's values, which has the same effect.
-
-If you want to explicitly delete a current keyed value, you must call `mirror.$delete(name)`. 
+Validation errors throw; however they do not terminate the Mirror (an RxJS-ism) or trigger any notification to any subscribers. 
 
 ## Actions
 
-@TODO
+Actions are functions that you can run to enact change on Mirror instances. 
+
+They are for the most part identical to running an external function to change the mirrors' state; except,
+when an action is running *all subscription updates are suspended until the action completes (or errors out).*
+This means you can change the mirrors' value several times, and even change child mirror values,
+and only on the completion of the action are updates broadcast. 
+
+Actions do not return values. If you want to capture values generated inside an action 
+you need to pass a callback to the action and send it information from inside the action. 
+
+### Asynchronicity in actions
+
+Actions are synchronous by nature -- from the point of view of the mechanics of the Mirror system. 
+If you trigger any async/promise behavior inside an action it will complete -- but it will do so *after* the
+actions changes have been flushed/committed into the Mirror and any changed children. 
+
+The safest way to manage async in actions is to encase the async resolution (i.e., the then handler) 
+in a single separate action call for maximum containment: i.e., 
+
+```javascript
+
+let changeId = 0;
+const myMirror = new Mirror(
+  {
+    current: 0,
+    pending: new Set(),
+  },
+  {
+      actions: {
+        newPending(change, callback) {
+          changeId += 1;
+          let id = changeId;
+          const pending = {change, id};
+          const nextSubmitted = new Set(my.value.pending);
+          nextSubmitted.add(pending);
+          me.$do.setPending(nextSubmitted);
+          callback(id);
+        },
+        sendToServer(me, change) {
+          let id = null;
+          me.$do.newPending(change, (nextId) => {
+            id = nextId;
+          });
+          axios.put('http://server.com/change', {change})
+            .then((response) => me.$do.acceptChange(response, id))
+            .catch((err) => me.$do.removePending(id));
+        },
+        acceptChange(me, response, id){
+          me.$do.removePending(id);
+          if (me.current !== response.data) {
+            me.$do.setCurrent(response.data);
+          }
+        },
+        removePending(me, id) {
+          const pendingChanges = Array.from(me.value.pending.values());
+          const without = pendingChanges.filter((change) => change.id !== id);
+          if (without.length < pendingChanges.length) {
+            me.$do.setPending(new Set(pendingChanges));
+          }
+        }
+  }
+});
+
+```
+
+## Nesting Actions 
+
+Actions can even call other actions. So you can create a complex nested series of updates, and their effects
+are buffered internally until all actions complete.
+
+### Errors in actions
+
+An un-trapped error in an action will flush all pending changes that were made after it started, and will be thrown. 
+this means, for instance, you can call an action from another action, catch any error around that call, and be 
+confident that the state of the mirror is unchanged; i.e., all buffered changes to date from other activity in the action
+is the same, *but* all changes from the subaction have been cleared.
+
+## The buffer (a very technical detail)
+
+During actions and updates from next, changes and actions are registered in a buffer array. During this transition
+all mirrors will reflect any buffered values as if these changes had been committed. 
+
+as long as there are actions in the buffer, the buffer remains active. After an error free action, or during next
+after validating that the mirrors all are error free, the buffer is flushed. 
+
+In flushing, if the buffer is error free and action free, buffered changes are committed to the mirror and broadcast. 
+
+Untrapped errors in sub-actions will cause an error in the calling action, causing its effects to be removed from the buffer,
+eventually clearing all the actions and their changes from the buffers, resulting in a no-op action with no effects on
+the broadcasting of updates, and the mirror is reset to its previous state.
+
+## Binding to React components
+
+Hooks are the easiest way to bind Mirrors to components. Local state can be bound and created in effects; global state
+can be imported directly or pulled from context. 
+
+```javascript
+
+export default function BoundLogin () {
+  
+  const [values, setValues] = useState(false);
+  const [fieldMirror, setFieldMirror] = useState(false);
+  useEffect(() => {
+    const mirror = new Mirror({userName: '', password: ''}, {
+      test({userName, password}) {
+        if (typeof userName !== 'string') return 'userName must be a string';
+        if (typeof password !== 'string') return 'password must be a string';
+      },
+      subjects: {
+        complete({userName, password})  {
+          return userName && password;
+        },
+        paswordValid({password}) {
+          return /^[a-zA-Z0-9_-]{8,}$/.test(password);
+        }
+      }
+    });
+    setFieldMirror(mirror);
+    const sub = mirror.subscribe(setValues);
+    return () => sub.unsubscribe();
+  }, 
+  []);
+  
+  if (values && fieldMirror) {
+    const {setUserName, setPassword} = fieldMirror.$do; // don't directly bind $do
+    return <Login {...values} setUserName={setUserName} setPassword={setPassword} />;
+  }
+}
+
+```
+
+In a class component you can use a local variable in a similar manner. 
+
+```javascript
+class BoundLogin extends Component {
+  constructor(props) {
+    super(props);
+    this._fieldMirror = new Mirror({ // same as above
+       });
+    
+    this.state = this._fieldMirror.value;
+  }
+  
+  componentDidMount() {
+    this._sub = mirror.subscribe((values) => {
+      this.setState(values);
+    });
+  }
+  
+  componentWillUnmount() {
+    if (this._sub) this._sub.unsubscribe();
+  }
+
+  render() {
+    const {setUserName, setPassword} = fieldMirror.$do; // don't directly bind $do
+    return <Login {...values} setUserName={setUserName} setPassword={setPassword} />;
+  }
+
+}
+
+```
+If you have a global Mirror, you can export it as a resource and bind it in the same way .
+
+Mirrors can also be passed down as context; the whole mirror can be a context's value, or,
+if you want context subscribers to update with the mirror, by putting the mirror in local state (as above) 
+and sharing the context and the value (as above, via `{fieldMirror, values}`) as the contexts' value. 
+
+## Related Libraries
+
+### Mirrors and RxJS
+
+Mirrors inherit from RxJS' BehaviorSubject. That means it interoperates with all RxJS functionality.
+
+### Immer and Mirror
+
+The value of a TYPE_OBJECT or TYPE_MAP is made immutable via Immer. Immer's produce is bundled with Mirror.
+
+That means if you want to update keys you must either:
+
+* call `myMirror.mutate((draft) => draft.foo = 3)`; // operates in the immer context;
+* call `myMirror.next(produce(myMirror.value, (draft) => {draft.foo = 3})`; // explicitly acts in the immer context
+* call `myMirror.update({foo: 3})`; // will internally use immer to update your value, leaving other ones unchanged.
+* call set(s) as in `myMirror.$do.setFoo(3)` // generally easier unless you need to validate a set of changes in parallel
 
 ## And lastly -- what is with all the dollar signs?
 

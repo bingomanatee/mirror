@@ -17,7 +17,7 @@ export default (BaseClass) => class WithEvents extends BaseClass {
     super(...args);
 
     this.$on(EVENT_TYPE_NEXT, (value, evt, target) => {
-      target.$_pushActive(evt);
+      target.$_addToChangeBuffer(evt);
     });
 
     this.$on(EVENT_TYPE_VALIDATE, (srcEvt, evt, target) => {
@@ -43,11 +43,11 @@ export default (BaseClass) => class WithEvents extends BaseClass {
         child.$send(EVENT_TYPE_REMOVE_FROM, order, true);
       });
 
-      target.$_removeFromActive(order, true);
+      target.$_removeFromBuffer(order, true);
     });
 
     this.$on(EVENT_TYPE_ACCEPT_FROM, (order, event, target) => {
-      const actions = target.$_allActive;
+      const actions = target.$_allBuffers;
       const inAction = actions.find((otherEvt) => otherEvt.$type === EVENT_TYPE_ACTION && otherEvt.$isBefore(order));
       if (inAction) {
         return;
@@ -63,7 +63,7 @@ export default (BaseClass) => class WithEvents extends BaseClass {
         target.$next(last.value);
       }
 
-      target.$_removeFromActive(order, true);
+      target.$_removeFromBuffer(order, true);
     });
   }
 
@@ -74,39 +74,39 @@ export default (BaseClass) => class WithEvents extends BaseClass {
     return this.$_events;
   }
 
-  get $_active() {
-    if (!this.$__active) {
-      this.$__active = [];
+  get $_changeBuffer() {
+    if (!this.$__buffer) {
+      this.$__buffer = [];
     }
-    return this.$__active;
+    return this.$__buffer;
   }
 
-  get $_allActive() {
+  get $_allBuffers() {
     if (this.$parent) {
-      return this.$root.$_downActive;
+      return this.$root.$_downBuffers;
     }
-    let active = [...this.$_active];
+    let active = [...this.$_changeBuffer];
     if (this.$_hasChildren) {
       this.$children.forEach((child) => {
-        active = compact([...active, ...child.$_downActive]);
+        active = [...active, ...child.$_downBuffers];
       });
     }
-    return active;
+    return compact(active);
   }
 
-  get $_downActive() {
-    let active = [...this.$_active];
+  get $_downBuffers() {
+    let active = [...this.$_changeBuffer];
     if (this.$_hasChildren) {
       this.$children.forEach((child) => {
-        active = compact([...active, ...child.$_downActive]);
+        active = [...active, ...child.$_downBuffers];
       });
     }
-    return active;
+    return compact(active);
   }
 
-  set $_active(list) {
+  set $_changeBuffer(list) {
     if (isArr(list)) {
-      this.$__active = list;
+      this.$__buffer = list;
       if (this.$watchActive) {
         this.$watchActive(list);
       }
@@ -118,18 +118,18 @@ export default (BaseClass) => class WithEvents extends BaseClass {
    * @param evt {MirrorEvent|Number}
    * @param removeAfter {boolean}
    */
-  $_removeFromActive(evt, removeAfter = false) {
-    let active = [...this.$_active];
+  $_removeFromBuffer(evt, removeAfter = false) {
+    let buffer = [...this.$_changeBuffer];
 
     if (removeAfter) {
-      active = active.filter((other) => other.$isBefore(evt));
+      buffer = buffer.filter((other) => other.$isBefore(evt));
     } else if (isNumber(evt)) {
-      active = active.filter((other) => other.$order !== evt);
+      buffer = buffer.filter((other) => other.$order !== evt);
     } else {
-      active = active.filter((other) => !other.matches(evt));
+      buffer = buffer.filter((other) => !other.matches(evt));
     }
-    if (active.length !== this.$_active.length) {
-      this.$_active = active;
+    if (buffer.length !== this.$_changeBuffer.length) {
+      this.$_changeBuffer = buffer;
     }
   }
 
@@ -139,20 +139,16 @@ export default (BaseClass) => class WithEvents extends BaseClass {
    * @param evt {MirrorEvent}
    * @returns {MirrorEvent}
    */
-  $_pushActive(evt) {
-    this.$_active = [...this.$_active, evt];
+  $_addToChangeBuffer(evt) {
+    this.$_changeBuffer = [...this.$_changeBuffer, evt];
     return evt;
   }
 
-  get $_activeErrors() {
-    return this.$_allActive.filter((ev) => ev.hasError);
-  }
-
   get $lastChange() {
-    if (!this.$__active) {
+    if (!this.$__buffer) {
       return null;
     }
-    return this.$_active.reduce((last, next) => {
+    return this.$_changeBuffer.reduce((last, next) => {
       if ((next.$type === EVENT_TYPE_NEXT) && (!next.hasError)) {
         return next;
       }

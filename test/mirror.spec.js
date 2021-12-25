@@ -27,7 +27,6 @@ tap.test(p.name, (suite) => {
     });
 
     mirTests.test('with validation', (valTest) => {
-      console.log('---- with validation');
       const mir = new Subject(1, {
         name: 'root',
         test: (val) => ((typeof val === 'number') ? null : 'not a number'),
@@ -50,6 +49,42 @@ tap.test(p.name, (suite) => {
       valTest.same(values, [1, 2, 4]);
 
       valTest.end();
+    });
+
+    mirTests.test('readme', (mt) => {
+      const numeric = new Subject(
+        {
+          number: 0,
+          min: -5,
+          max: 5,
+        },
+        {
+          name: 'safe-number',
+          test(next, mirror) {
+            const { number } = next;
+            if (typeof number !== 'number') return 'not a number';
+            if (number > mirror.value.max) return `must be <= ${mirror.value.max}`;
+            if (number < mirror.value.min) return `must be >= ${mirror.value.min}`;
+          },
+        },
+      );
+
+      numeric.$do.setNumber(4);
+      mt.same(numeric.value.number, 4);
+      console.log('value: ', numeric.value.number); // 'value: 4'
+      let e = null;
+      try {
+        numeric.$do.setNumber(6);
+      } catch (err) {
+        console.log('error: ', err); // 'error:  { target: 'safe-number', error: 'must be <= 5' }';
+        e = err;
+      }
+      mt.same(numeric.value.number, 4);
+
+      numeric.$do.setNumber(2);
+      console.log('value: ', numeric.value.number); // 'value: 2'
+      mt.same(numeric.value.number, 2);
+      mt.end();
     });
 
     mirTests.end();

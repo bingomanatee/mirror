@@ -6,10 +6,10 @@ import {
   EVENT_TYPE_FLUSH_ACTIVE,
   EVENT_TYPE_DEBUG,
   EVENT_TYPE_NEXT,
-  EVENT_TYPE_VALIDATE,
+  EVENT_TYPE_VALIDATE, TYPE_MAP, TYPE_OBJECT, TYPE_ARRAY,
 } from './constants';
 import {
-  isObj, isFn, asImmer, isStr,
+  isObj, isFn, asImmer, isStr, e, produce, typeOfValue,
 } from './utils';
 import propsMixin from './propsMixin';
 import childMixin from './childMixin';
@@ -59,6 +59,50 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
         value,
       });
     }
+  }
+
+  update(values, offset = 0) {
+    const type = this.$type;
+    const valueType = typeOfValue(values);
+    if (valueType !== type) {
+      throw e('Bad update:', {
+        values,
+        target: this,
+        valueType,
+      });
+    }
+
+    if (![TYPE_MAP, TYPE_OBJECT, TYPE_ARRAY].includes(type)) {
+      throw new Error('bad type for update: ', {
+        target: this,
+        type,
+      });
+    }
+
+    const next = produce(this.value, (draft) => {
+      switch (type) {
+        case 'map':
+          values.forEach((keyValue, key) => {
+            draft.set(key, keyValue);
+          });
+          break;
+
+        case 'object':
+          Object.keys(values)
+            .forEach((key) => {
+              draft[key] = values[key];
+            });
+          break;
+
+        case 'array':
+          values.forEach((item, index) => {
+            draft[index + offset] = item;
+          });
+          break;
+      }
+    });
+
+    this.next(next);
   }
 
   next(value) {

@@ -40,8 +40,8 @@ tap.test(p.name, (suite) => {
       bs.same(m.value, { alphaField: 2, betaField: 4 });
       bs.same(m.$children.get('alphaField').value, 2);
       bs.same(history, [{ alphaField: 0, betaField: 0 }, { alphaField: 2, betaField: 4 }]);
-      bs.same(m.$children.get('alphaField').$_active, []);
-      bs.same(m.$children.get('betaField').$_active, []);
+      bs.same(m.$children.get('alphaField').$_changeBuffer, []);
+      bs.same(m.$children.get('betaField').$_changeBuffer, []);
 
       let err = null;
       try {

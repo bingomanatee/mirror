@@ -1,8 +1,8 @@
 import {
-  EVENT_TYPE_ACCEPT_FROM, EVENT_TYPE_ACTION, EVENT_TYPE_FLUSH_ACTIVE, EVENT_TYPE_REMOVE_FROM,
+  EVENT_TYPE_ACTION, EVENT_TYPE_FLUSH_ACTIVE,
 } from './constants';
 import { isFn, isObj } from './utils';
-import { makeDoProxy } from './mirrorMisc';
+import { makeDoObj, makeDoProxy } from './mirrorMisc';
 
 export default (BaseClass) => class WithActions extends BaseClass {
   constructor(value, config, ...rest) {
@@ -12,7 +12,7 @@ export default (BaseClass) => class WithActions extends BaseClass {
 
     this.$on(EVENT_TYPE_ACTION, ({ fn, args }, evt, target) => {
       if (!evt.isStopped) {
-        target.$_pushActive(evt);
+        target.$_addToChangeBuffer(evt);
 
         try {
           fn(target, ...args);
@@ -31,7 +31,7 @@ export default (BaseClass) => class WithActions extends BaseClass {
   }
 
   get $isInAction() {
-    const action = this.$_allActive.find(({ type, committed }) => (!committed) && (type === EVENT_TYPE_ACTION));
+    const action = this.$_allBuffers.find(({ type, committed }) => (!committed) && (type === EVENT_TYPE_ACTION));
     return !!action;
   }
 

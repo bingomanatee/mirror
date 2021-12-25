@@ -1,7 +1,7 @@
 import { SET_RE, TYPE_MAP, TYPE_OBJECT } from './constants';
 import { ucFirst, isStr } from './utils';
 
-function makeDoObj(target) {
+export function makeDoObj(target) {
   const obj = {};
   target.$_actions.forEach((fn, name) => {
     try {
