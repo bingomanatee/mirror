@@ -61,6 +61,11 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
     }
   }
 
+  /**
+   * merge a subset of changes into the state.
+   * @param values
+   * @param offset
+   */
   update(values, offset = 0) {
     const type = this.$type;
     const valueType = typeOfValue(values);
@@ -106,26 +111,16 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
   }
 
   next(value) {
-    const evt = this.$send(EVENT_TYPE_NEXT, value);
-
-    if (!evt.isStopped) {
-      if (this.$_hasChildren) {
-        if (this.$_hasChildren) {
-          evt._value = this.$_withChildValues(value);
-        }
-      }
-
-      if (this.$_hasSelectors) {
-        evt._value = this.$_withSelectors(evt.value);
-      }
-
-      this.$root.$send(EVENT_TYPE_VALIDATE, evt);
+    let change = value;
+    const evt = this.$send(EVENT_TYPE_NEXT, change);
+    if (this.$_hasChildren) {
+      change = this.$_withChildValues(change);
     }
-
-    if (!evt.isStopped) {
-      evt.complete();
+    if (this.$_hasSelectors) {
+      change = this.$_withSelectors(change);
     }
-
+    evt.value = change;
+    this.$root.$send(EVENT_TYPE_VALIDATE, evt);
     this.$send(EVENT_TYPE_FLUSH_ACTIVE, evt, true);
     if (evt.hasError) {
       throw evt.thrownError;
@@ -133,8 +128,8 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
   }
 
   $addTest(handler) {
-    return this.$on(EVENT_TYPE_VALIDATE, (srcEvt, evt, tgt) => {
-      if (!srcEvt.isStopped) {
+    return this.$on(EVENT_TYPE_VALIDATE, (changeEvent, evt, tgt) => {
+      if (!changeEvent.isStopped) {
         const value = tgt.getValue();
 
         let err = null;
@@ -145,11 +140,7 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
         }
 
         if (err) {
-          tgt.$note('error -- to event', {
-            err,
-            target: tgt.$name,
-          });
-          srcEvt.error({
+          changeEvent.error({
             target: tgt.$name,
             error: err,
           });

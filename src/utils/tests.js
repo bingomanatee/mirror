@@ -1,6 +1,7 @@
 import {
   ABSENT, NAME_UNNAMED, TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT, TYPE_VALUE,
 } from '../constants';
+import isMirror from './isMirror';
 
 const isNum = require('lodash/isNumber');
 
@@ -60,6 +61,9 @@ export function isStr(s, nonEmpty = false) {
 }
 
 export function typeOfValue(value) {
+  if (isMirror(value)) {
+    return TYPE_MIRROR;
+  }
   let type = TYPE_VALUE;
   if (isMap(value)) {
     type = TYPE_MAP;

@@ -60,10 +60,20 @@ Well that's fine - but if you want to ensure x and y are numeric you have to eit
 on ALL these actions (and any that haven't been written yet) or a generic observable on all changes 
 to the whole state in a separate global hook which makes it really rough to test.
 
+### Reacting to Redux
+
 Redux is a "write first, manage afterwards" system. That style of change is puts all the wait on the calling context
 to provide any buffer and check on the system before the change, and makes nested calling essentially impossible. 
 
-Nested change is the foundation of any managed system.
+In practice, this means that business logic that is state - centric ends up getting embedded in "controller" components
+and view systems; this both reduces redability and testability to state changes. If the logic that is driven off state changes 
+is distributed, it becomes difficult in any given scenario to follow the chain of action changes and code responses. 
+It also means that if the action changes cause a situation with unwanted side effects, it is more problematic for reaction
+code to eliminate those side effects, because the unwanted result as already been broadcast over the application, 
+and whatever code you write to manage the undesired combination of data is already causing view reactions even as you 
+detect and manage it. 
+
+
 
 ## Transactional and processing change
 
@@ -126,16 +136,16 @@ Some stores are tactical and component scoped. For instance you have state and s
 that is not needed elsewhere in an application. Alternatively you may have a user scope with (amongst other things)
 the identity of the logged in user that is needed nearly everywhere else. 
 
-Right now we have one system (redux) that is optimized to sharing its content across the entire system;
+Right now we have one system (Redux) that is optimized to sharing its content across the entire system;
 even with reducers you still have one massive monolith.
 
 Then you have a second set of native systems -- setState and hooks -- that manage local state. 
-Mirror still depends on hooks to export its values into view state, but you can bundle an entire 
+Mirror still depends on hooks to inject its values into view state, but you can bundle an entire 
 local state system into a local mirror, which allows you to run tests on it and incorporate 
 value changes from global states into the local level, using largely the same architecture 
 for local and global value management. 
 
-## Independant structure
+## Independent structure
 
 Part of the reason that Mirror has these abilities is that it was designed with React in mind -- 
 but like RxJS it is not limited or dependent on React. It can be used with Preact, Vue, Angular or 

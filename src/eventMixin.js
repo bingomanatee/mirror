@@ -20,11 +20,11 @@ export default (BaseClass) => class WithEvents extends BaseClass {
       target.$_addToChangeBuffer(evt);
     });
 
-    this.$on(EVENT_TYPE_VALIDATE, (srcEvt, evt, target) => {
-      if ((!evt.hasError) && target.$_hasChildren) {
+    this.$on(EVENT_TYPE_VALIDATE, (changeEvent, evt, target) => {
+      if ((target.$_hasChildren) && (!evt.hasError) && (!changeEvent.hasError)) {
         target.$children.forEach((child) => {
-          if (!evt.hasError) {
-            child.$send(EVENT_TYPE_VALIDATE, srcEvt);
+          if (!changeEvent.hasError) {
+            child.$send(EVENT_TYPE_VALIDATE, changeEvent);
           }
         });
       }
@@ -174,17 +174,13 @@ export default (BaseClass) => class WithEvents extends BaseClass {
 
   /**
    *
-   * @param type {scalar}
+   * @param type {string|Symbol}
    * @param handler {function}
    * @returns {Subscription | void | Unsubscribable | Promise<PushSubscription>}
    */
   $on(type, handler) {
     const target = this;
-    return this.$events.pipe(filter((e) => {
-      const sameType = e.$type === type;
-      // console.log('$on: test = ', type, 'event = ', e.value, '/', e.$type, 'result =', sameType);
-      return sameType;
-    }))
+    return this.$events.pipe(filter((e) => e.$type === type))
       .subscribe({
         next(e) {
           if (!e.isStopped) {

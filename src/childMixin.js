@@ -1,6 +1,6 @@
 import {
   ABSENT,
-  EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_FROM, TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT,
+  EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_FROM, EVENT_TYPE_VALIDATE, TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT,
 } from './constants';
 import {
   isObj, typeOfValue, hasKey, getKey, setKey, produce, isEqual,
@@ -12,36 +12,32 @@ export default (BaseClass) => class WithChildren extends BaseClass {
 
     config && this.$_configChildren(config);
 
-    this.$on(EVENT_TYPE_NEXT, (value, evt, target) => {
+    this.$on(EVENT_TYPE_NEXT, (nextValue, evt, target) => {
       if (!target.$_hasChildren) {
         return;
       }
 
-      const valueType = typeOfValue(value);
+      const valueType = typeOfValue(nextValue);
 
       target.$children.forEach((child, key) => {
         if (evt.hasError) {
           return;
         }
-        if (hasKey(value, key, valueType)) {
-          const childValue = getKey(value, key, valueType);
-          target.$note('sending child value:', {
-            key,
-            childValue,
-          });
+        if (hasKey(nextValue, key, valueType)) {
+          const childValue = getKey(nextValue, key, valueType);
           if (child.value === childValue || isEqual(child.value, childValue)) {
             return;
           }
-          const childEvt = child.$send(EVENT_TYPE_NEXT, childValue, true);
-          if (childEvt.hasError) {
+          const changeEvent = child.$send(EVENT_TYPE_NEXT, childValue, true);
+          if (!changeEvent.hasError) {
+            child.$send(EVENT_TYPE_VALIDATE, changeEvent);
+          } else {
+            child.$send(EVENT_TYPE_REMOVE_FROM, changeEvent.$order);
             evt.error({
-              error: childEvt.thrownError,
+              error: changeEvent.thrownError,
               target: key,
             });
-            child.$send(EVENT_TYPE_REMOVE_FROM, childEvt.$order);
           }
-        } else {
-          target.$note('not updating child ', { key });
         }
       });
     });
@@ -75,13 +71,17 @@ export default (BaseClass) => class WithChildren extends BaseClass {
         if (target.$lastChange) {
           const lastValueChildValue = getKey(target.$lastChange.value, key);
           if (lastValueChildValue !== value) {
-            target.$lastChange._value = produce(target.$lastChange.value, (draft) => {
-              setKey(draft, key, value);
-            });
+            try {
+              setKey(target.$lastChange.value, key, value);
+            } catch (err) {
+              target.$lastChange.value = produce(target.$lastChange.value, (draft) => {
+                setKey(draft, key, value);
+              });
+            }
           }
         } else {
-          const lastValueChildValue = getKey(target.value, key);
-          if (lastValueChildValue !== value) {
+          const childValue = getKey(target.value, key);
+          if (childValue !== value) {
             target.next(produce(target.value, (draft) => {
               setKey(draft, key, value);
             }));

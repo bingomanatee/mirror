@@ -6,17 +6,13 @@ import { MIRROR_EVENT_STATE_ACTIVE, MIRROR_EVENT_STATE_COMPLETE, MIRROR_EVENT_ST
 let order = 0;
 export default class MirrorEvent {
   constructor(value, type, target) {
-    this._value = value;
+    this.value = value;
     this.$type = type;
     this.$target = target;
     this.$id = idGen();
     this.$order = order;
     order += 1;
     this._state = MIRROR_EVENT_STATE_ACTIVE;
-  }
-
-  get value() {
-    return this._value;
   }
 
   get state() {
@@ -27,10 +23,6 @@ export default class MirrorEvent {
     if (!this.isStopped) {
       this._state = state;
     }
-  }
-
-  watch(fn) {
-
   }
 
   get hasError() {
