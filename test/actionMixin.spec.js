@@ -1,4 +1,5 @@
 import tap from 'tap';
+import watch from '../watch';
 
 const p = require('../package.json');
 
@@ -86,6 +87,22 @@ tap.test(p.name, (suite) => {
       bf.same(values, [{ x: 1, y: 2 }, { x: 5, y: 12 }]);
 
       bf.end();
+    });
+
+    actionTests.test('$mutate', (mut) => {
+      const mir = new Subject({ x: 10, y: 30 });
+      const [{ history }] = watch(mir);
+
+      mut.same(history, [{ x: 10, y: 30 }]);
+      mir.$mutate((target) => {
+        const { x } = target;
+        target.x = target.y;
+        target.y = x;
+      });
+
+      mut.same(history, [{ x: 10, y: 30 }, { x: 30, y: 10 }]);
+
+      mut.end();
     });
 
     actionTests.end();

@@ -1,7 +1,7 @@
 import {
-  ABSENT, NAME_UNNAMED, TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT, TYPE_VALUE,
+  ABSENT, NAME_UNNAMED, TYPE_ARRAY, TYPE_MAP, TYPE_MIRROR, TYPE_OBJECT, TYPE_VALUE,
 } from '../constants';
-import isMirror from './isMirror';
+import { isMirror } from './reflection';
 
 const isNum = require('lodash/isNumber');
 

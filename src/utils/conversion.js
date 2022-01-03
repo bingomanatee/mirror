@@ -1,4 +1,6 @@
-import { isMap, isObj, isStr, isNumber } from './tests';
+import {
+  isMap, isObj, isStr, isNumber, e,
+} from './tests';
 
 export function toMap(m, force) {
   if (m instanceof Map) {
@@ -22,7 +24,7 @@ export function toMap(m, force) {
  */
 export function toObj(m, force = false) {
   if (!(isObj(m) || isMap(m))) {
-    throw Object.assign(new Error('cannot convert target to object'), { target: m });
+    throw e('cannot convert target to object', { target: m });
   }
   let out = m;
   if (isObj(m)) {

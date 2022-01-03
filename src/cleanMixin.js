@@ -1,23 +1,28 @@
 import {
-  EVENT_TYPE_SET, TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT,
+  EVENT_TYPE_CLEAN,
 } from './constants';
 import {
-  toMap, isObj, isWhole, produce, typeOfValue, isFn, isStr,
+  isObj, isFn, e, toMap,
 } from './utils';
 
-export default (BaseClass) => class WithSanitize extends BaseClass {
+export default (BaseClass) => class WithClean extends BaseClass {
   constructor(val, config, ...args) {
     super(val, config, ...args);
 
-    this.$configSanitizers(config);
-
-    if (this.$_hasSanitizers) {
-      this.next(this.value);
-    }
+    this.$_configCleaner(config);
   }
 
-  $addSanitizer(handler) {
-    return this.$on(SANITIZE_VALUE, (evt, target) => {
+  $_configCleaner(config) {
+    if (!isObj(config)) return;
+    const { cleaner } = config;
+    if (cleaner) this.$addCleaner(cleaner);
+
+    // note -- multiple clenaers added in core Mirror
+  }
+
+  $addCleaner(handler) {
+    if (!isFn(handler)) throw e('cannot add handler: not a function', { handler });
+    const sub = this.$on(EVENT_TYPE_CLEAN, (value, evt) => {
       if (!evt.hasErrors) {
         try {
           evt.value = handler(evt.value);
@@ -26,5 +31,14 @@ export default (BaseClass) => class WithSanitize extends BaseClass {
         }
       }
     });
+
+    // validate that cleaner has not made current value impossible.
+    const evt = this.$send(this.value);
+    if (evt.hasError) {
+      console.log('cannot add cleaner: ', handler, 'initial value is invalid');
+      throw evt.thrownError;
+    }
+
+    return sub;
   }
 };

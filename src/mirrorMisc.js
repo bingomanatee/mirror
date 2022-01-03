@@ -1,5 +1,5 @@
 import { SET_RE, TYPE_MAP, TYPE_OBJECT } from './constants';
-import { ucFirst, isStr } from './utils';
+import { ucFirst, isStr, e } from './utils';
 
 export function makeDoObj(target) {
   const obj = {};
@@ -57,7 +57,7 @@ export function makeDoProxy(target) {
       }
 
       return () => {
-        throw new Error(`no action named ${name}`);
+        throw e('no action named', { name });
       };
     },
   });

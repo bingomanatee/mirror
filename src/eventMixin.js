@@ -8,7 +8,6 @@ import {
   EVENT_TYPE_FLUSH_ACTIVE,
   EVENT_TYPE_NEXT,
   EVENT_TYPE_REMOVE_FROM,
-  EVENT_TYPE_VALIDATE,
 } from './constants';
 import { compact, isArr, isNumber } from './utils';
 
@@ -18,16 +17,6 @@ export default (BaseClass) => class WithEvents extends BaseClass {
 
     this.$on(EVENT_TYPE_NEXT, (value, evt, target) => {
       target.$_addToChangeBuffer(evt);
-    });
-
-    this.$on(EVENT_TYPE_VALIDATE, (changeEvent, evt, target) => {
-      if ((target.$_hasChildren) && (!evt.hasError) && (!changeEvent.hasError)) {
-        target.$children.forEach((child) => {
-          if (!changeEvent.hasError) {
-            child.$send(EVENT_TYPE_VALIDATE, changeEvent);
-          }
-        });
-      }
     });
 
     this.$on(EVENT_TYPE_FLUSH_ACTIVE, (evt, commitEvt, target) => {

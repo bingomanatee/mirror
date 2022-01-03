@@ -7,22 +7,21 @@ export const NAME_UNNAMED = Symbol('unnamed');
 
 export const ABSENT = Symbol('ABSENT');
 
-export const CHILDREN = Symbol('CHILDREN');
+export const EVENT_TYPE_NEXT = Symbol('next');
+export const EVENT_TYPE_SET = Symbol('set');
+export const EVENT_TYPE_DEBUG = Symbol('debug');
+export const EVENT_TYPE_CLEAN = Symbol('clean');
 
-export const EVENT_TYPE_NEXT = 'next';
-export const EVENT_TYPE_SET = 'set';
-export const EVENT_TYPE_DEBUG = 'debug';
+export const EVENT_TYPE_ACCEPT_FROM = Symbol('event:acceptFrom');
+export const EVENT_TYPE_REMOVE_FROM = Symbol('event:removeFrom');
 
-export const EVENT_TYPE_ACCEPT_FROM = 'event:acceptFrom';
-export const EVENT_TYPE_REMOVE_FROM = 'event:removeFrom';
-
-export const EVENT_TYPE_FLUSH_ACTIVE = 'event:commit';
-export const EVENT_TYPE_ACTION = 'event:action';
-export const EVENT_TYPE_MUTATE = 'event:mutate';
-export const EVENT_TYPE_VALIDATE = 'event:validate';
+export const EVENT_TYPE_FLUSH_ACTIVE = Symbol('event:commit');
+export const EVENT_TYPE_ACTION = Symbol('event:action');
+export const EVENT_TYPE_MUTATE = Symbol('event:mutate');
+export const EVENT_TYPE_VALIDATE = Symbol('event:validate');
 export const SET_RE = /^set(.+)$/i;
 
-export const MIRROR_EVENT_STATE_ACTIVE = 'mirror-event-state:active';
-export const MIRROR_EVENT_STATE_ERROR = 'mirror-state:error';
-export const MIRROR_EVENT_STATE_STOPPED = 'mirror-state:stopped';
-export const MIRROR_EVENT_STATE_COMPLETE = 'mirror-state:stopped';
+export const MIRROR_EVENT_STATE_ACTIVE = Symbol('mirror-event-state:active');
+export const MIRROR_EVENT_STATE_ERROR = Symbol('mirror-state:error');
+export const MIRROR_EVENT_STATE_STOPPED = Symbol('mirror-state:stopped');
+export const MIRROR_EVENT_STATE_COMPLETE = Symbol('mirror-state:complete');

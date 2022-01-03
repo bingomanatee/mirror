@@ -1,10 +1,11 @@
 import {
-  ABSENT,
+  ABSENT, EVENT_TYPE_CLEAN,
   EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_FROM, EVENT_TYPE_VALIDATE, TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT,
 } from './constants';
 import {
   isObj, typeOfValue, hasKey, getKey, setKey, produce, isEqual,
 } from './utils';
+import { create, isMirror } from './utils/reflection';
 
 export default (BaseClass) => class WithChildren extends BaseClass {
   constructor(value, config, ...args) {
@@ -24,7 +25,15 @@ export default (BaseClass) => class WithChildren extends BaseClass {
           return;
         }
         if (hasKey(nextValue, key, valueType)) {
-          const childValue = getKey(nextValue, key, valueType);
+          const sanChildValueEvent = child.$send(EVENT_TYPE_CLEAN, getKey(nextValue, key, valueType));
+          if (sanChildValueEvent.hasError) {
+            evt.error({
+              error: sanChildValueEvent.thrownError,
+              target: key,
+              type: 'clean',
+            });
+          }
+          const childValue = sanChildValueEvent.value;
           if (child.value === childValue || isEqual(child.value, childValue)) {
             return;
           }
@@ -40,6 +49,26 @@ export default (BaseClass) => class WithChildren extends BaseClass {
           }
         }
       });
+    });
+
+    /**
+     * validate children during a validate event, on the possibility
+     * that their validation tests may depend on the current value of their parents
+     *
+     * note - validate is a trigger to validate the mirror's current value;
+     * if it is invalid, validate the changeEvent.
+     * changeEvent may come from elsewhere and its manifest may be relevant to a different target.
+     *
+     * On an error, invalidate the change event.
+     */
+    this.$on(EVENT_TYPE_VALIDATE, (changeEvent, evt, target) => {
+      if ((target.$_hasChildren) && (!changeEvent.hasError)) {
+        target.$children.forEach((child) => {
+          if (!changeEvent.hasError) {
+            child.$send(EVENT_TYPE_VALIDATE, changeEvent);
+          }
+        });
+      }
     });
   }
 
@@ -61,7 +90,14 @@ export default (BaseClass) => class WithChildren extends BaseClass {
     return !!this.$_children && this.$children.size;
   }
 
-  $addChild(key, child) {
+  $hasChild(name) {
+    return this.$_hasChildren ? this.$children.has(name) : false;
+  }
+
+  $addChild(key, child, config) {
+    if (!isMirror(child)) {
+      child = create(child, config);
+    }
     child.$parent = this;
     child.$name = key;
     const target = this;

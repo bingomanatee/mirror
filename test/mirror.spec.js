@@ -1,7 +1,6 @@
 import tap from 'tap';
-import watchAll from '../watchAll';
+import watch from '../watch';
 
-const { inspect } = require('util');
 const p = require('../package.json');
 
 const subjectName = 'Mirror';
@@ -71,20 +70,29 @@ tap.test(p.name, (suite) => {
 
       numeric.$do.setNumber(4);
       mt.same(numeric.value.number, 4);
-      console.log('value: ', numeric.value.number); // 'value: 4'
       let e = null;
       try {
         numeric.$do.setNumber(6);
       } catch (err) {
-        console.log('error: ', err); // 'error:  { target: 'safe-number', error: 'must be <= 5' }';
         e = err;
       }
       mt.same(numeric.value.number, 4);
 
       numeric.$do.setNumber(2);
-      console.log('value: ', numeric.value.number); // 'value: 2'
       mt.same(numeric.value.number, 2);
       mt.end();
+    });
+
+    mirTests.test('$update', (ut) => {
+      const mir = new Subject({ x: 10, y: 20 });
+      const [{ history }] = watch(mir);
+
+      ut.same(history, [{ x: 10, y: 20 }]);
+
+      mir.$update({ y: 30 });
+      ut.same(history, [{ x: 10, y: 20 }, { x: 10, y: 30 }]);
+
+      ut.end();
     });
 
     mirTests.end();

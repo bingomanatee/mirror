@@ -14,26 +14,20 @@ function simple(pending) {
 
 const Subject = lib[subjectName];
 tap.test(p.name, (suite) => {
-  suite.test(`${subjectName}/actions`, (actionTests) => {
-    actionTests.test('basic flow', (bf) => {
+  suite.test(`${subjectName}/clean`, (cleanTests) => {
+    cleanTests.test('simple clean', (bf) => {
       const values = [];
-      const pend = [];
       const mir = new Subject(4, {
-        actions: {
-          double: (m) => {
-            m.next(m.value * 2);
-          },
+        cleaner(value) {
+          if (typeof value === 'number') {
+            return Math.floor(value);
+          }
+          return value;
         },
       });
       mir.subscribe((v) => values.push(v));
 
-      mir.$watchActive = (pending) => {
-        pend.push(simple(pending));
-      };
-
-      mir.$do.double();
-
-      //  console.log('pending:', pend);
+      mir.next(8.2);
 
       bf.same(mir.value, 8);
       bf.same(values, [4, 8]);
@@ -41,54 +35,7 @@ tap.test(p.name, (suite) => {
       bf.end();
     });
 
-    actionTests.test('key setter', (ks) => {
-      const values = [];
-
-      const mir = new Subject({ x: 1, y: 2 }, {
-
-      });
-      mir.subscribe((v) => values.push(v));
-
-      mir.$do.setX(5);
-      mir.$do.setY(12);
-
-      ks.same(mir.value, { x: 5, y: 12 });
-      ks.same(values, [{ x: 1, y: 2 }, { x: 5, y: 2 }, { x: 5, y: 12 }]);
-      ks.end();
-    });
-
-    actionTests.test('multi update action', (bf) => {
-      const values = [];
-      const pend = [];
-      const mir = new Subject({ x: 1, y: 2 }, {
-        actions: {
-          offset: (m, x, y) => {
-            const value = { ...m.value };
-            value.x += x;
-            m.next(value);
-            const value2 = { ...m.value };
-            value2.y += y;
-            m.next(value2);
-          },
-        },
-      });
-      mir.subscribe((v) => values.push(v));
-
-      mir.$watchActive = (pending) => {
-        pend.push(simple(pending));
-      };
-
-      mir.$do.offset(4, 10);
-
-      //  console.log('pending:', pend);
-
-      bf.same(mir.value, { x: 5, y: 12 });
-      bf.same(values, [{ x: 1, y: 2 }, { x: 5, y: 12 }]);
-
-      bf.end();
-    });
-
-    actionTests.end();
+    cleanTests.end();
   });
 
   suite.end();

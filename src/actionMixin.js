@@ -1,5 +1,6 @@
+import produce from 'immer';
 import {
-  EVENT_TYPE_ACTION, EVENT_TYPE_FLUSH_ACTIVE,
+  EVENT_TYPE_ACTION, EVENT_TYPE_FLUSH_ACTIVE, TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT,
 } from './constants';
 import { isFn, isObj } from './utils';
 import { makeDoObj, makeDoProxy } from './mirrorMisc';
@@ -19,6 +20,8 @@ export default (BaseClass) => class WithActions extends BaseClass {
         } catch (err) {
           evt.error(err);
         }
+
+        target.$send(EVENT_TYPE_FLUSH_ACTIVE, evt, true);
       }
     });
   }
@@ -47,7 +50,6 @@ export default (BaseClass) => class WithActions extends BaseClass {
       fn,
       args,
     }, true);
-    this.$send(EVENT_TYPE_FLUSH_ACTIVE, evt, true);
     if (evt.hasError) throw evt.thrownError;
   }
 
@@ -75,9 +77,28 @@ export default (BaseClass) => class WithActions extends BaseClass {
 
   $mutate(fn) {
     if (!isFn(fn)) {
-      throw new Error('$mutate expects function');
+      throw e('$mutate expects function', { source: '$mutate', fn });
     }
 
-    this.next(fn(this.value, this));
+    let { value } = this;
+
+    switch (this.$type) {
+      case TYPE_OBJECT:
+        value = produce(this.value, fn);
+        break;
+
+      case TYPE_ARRAY:
+        value = produce(this.value, fn);
+        break;
+
+      case TYPE_MAP:
+        value = produce(this.value, fn);
+        break;
+
+      default:
+        value = fn(value);
+    }
+
+    this.next(value);
   }
 };

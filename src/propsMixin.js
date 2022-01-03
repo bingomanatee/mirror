@@ -2,7 +2,7 @@ import {
   EVENT_TYPE_SET, TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT,
 } from './constants';
 import {
-  toMap, isObj, isWhole, produce, typeOfValue, isFn, isStr,
+  toMap, isObj, isWhole, produce, typeOfValue, isFn, isStr, e, getKey,
 } from './utils';
 
 export default (BaseClass) => class WithProps extends BaseClass {
@@ -61,7 +61,7 @@ export default (BaseClass) => class WithProps extends BaseClass {
         break;
 
       default:
-        throw new Error('$set is not appropriate for this type of target');
+        throw e('$set is not appropriate for this type of target', { key, value, target: this });
     }
     this.next(next);
   }
@@ -103,8 +103,9 @@ export default (BaseClass) => class WithProps extends BaseClass {
       case TYPE_ARRAY:
         if (isWhole(key)) {
           out = key;
+        } else {
+          throw e('non-whole key for array', { key });
         }
-        throw new Error('bad key for array');
         break;
     }
 
@@ -125,6 +126,10 @@ export default (BaseClass) => class WithProps extends BaseClass {
 
   get $_hasSelectors() {
     return this.$__selectors && this.$__selectors.size > 0;
+  }
+
+  $get(key) {
+    return getKey(this.value, key);
   }
 
   $_withSelectors(value) {

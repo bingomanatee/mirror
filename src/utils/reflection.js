@@ -1,9 +1,8 @@
-let instance = null;
+let Mirror = null;
 
 export const setInstance = (inst) => {
-  instance = inst;
+  Mirror = inst;
 };
 
-export default function isMirror(target) {
-  return target instanceof instance;
-}
+export const isMirror = (target) => target instanceof Mirror;
+export const create = (...args) => new Mirror(...args);

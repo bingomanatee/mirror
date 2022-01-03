@@ -29,6 +29,20 @@ Mirrors follow the following mandates; they are:
 These traits allow for a strong, managed state experience in any context from React to Angular and even 
 node, bare-metal design or any other context.
 
+## Mirror Values
+
+Mirror values are not specified; however, they are intended to be either:
+
+* **scalar** values (strings, numbers, null) 
+* **Maps** (see [Javascript Maps](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map)) 
+* **Arrays** 
+* **Objects** -- [immerable](https://immerjs.github.io/immer/) or POJO objects. 
+
+Object's/Map's fields will automatically generate setter actions; i.e., a Mirror with a value `{x: 0, y: 0}` will have
+an action `myMirror.$do.setX(10)` and `myMirror.$do.setY(20)`. 
+
+Complex objects will be expressed as Immerable instances and therefore are immutable. 
+
 ## Subscriptions 
 
 Getting updates from a Mirror follows the standard observable pattern: 
@@ -54,7 +68,157 @@ more formally you can `subscribe({next(value) {...}}`.
 note, subscriptions are cancellable; this is important for situations where the mirrors; lifespan is longer
 than the lifespan of the observation. 
 
-### Validation tests
+## Updating State
+
+There are a few ways to update a Mirror's state. 
+
+If you want to change a subset of fields and ensure all the changes are valid (all or nothing)
+* call `instance.$update({changes})` to update a subset of an mirror values. (like React's setState). 
+* call `instance.$mutate(fn)` to call a function to change the mirror's value. Inside the function you can change the target like a normal POJO object/map. This is best, like update (see notes on [immer produce](https://immerjs.github.io/immer/produce)) 
+
+If you want to change a single field
+* call `instance.$do.setFieldName(newValue)` to change a single field's value, for objects or Maps.
+
+If the mirror is a simple value (string, number) or you want to change all of the mirror's value at once
+* call `instance.next({new value})` to replace its current value with another value.
+
+```javascript
+
+const point = new Mirror({x: 10, y: 20, z: 30});
+point.subscribe((value) => console.log('point is ', value));
+// point is {x: 10, y: 20, z: 30)};
+
+point.$update({x: 30});
+
+// point is {x: 30, y: 20, z: 30});
+
+point.$do.setX(50);
+// point is {x: 50, y: 20, z: 30});
+point.$do.setY(60);
+// point is {x: 50, y: 60, z: 30});
+point.$do.setZ(70);
+// point is {x: 50, y: 60, z: 70});
+
+point.next({x: 1, y: 2, z: 3});
+// point is {x: 1, y: 2, z: 3}
+
+point.$mutate((point) => {
+  point.x *= 2;
+  point.y *= 2;
+  point.z *= 2;
+});
+// point is {x: 2, y: 4, z: 6}
+
+```
+
+## Actions
+
+Actions are functions that you can run to enact change on Mirror instances.
+
+They are for the most part identical to running an external function to change the mirrors' state; except,
+when an action is running *all subscription updates are suspended until the action completes (or errors out).*
+This means you can change the mirrors' value several times, and even change child mirror values,
+and only on the completion of the action are updates broadcast.
+
+Actions do not return values. If you want to capture values generated inside an action
+you need to pass a callback to the action and send it information from inside the action.
+
+Actions are defined by the actions property of the configuration, and/or calls to `$addAction(name, fn)`.
+They are accessible from the `myInstance.$do.actionName(...args)` property of the mirror.
+
+### Asynchronicity in actions
+
+Actions are synchronous by nature -- from the point of view of the mechanics of the Mirror system.
+If you trigger any async/promise behavior inside an action it will complete -- but it will do so *after*
+the actions changes have been flushed/committed into the Mirror and any changed children.
+
+The safest way to manage async in actions is to encase the async resolution (i.e., the then handler)
+in a single separate action call for maximum containment: i.e.,
+
+```javascript
+
+let changeId = 0;
+const myMirror = new Mirror(
+  {
+    current: 0,
+    sentError: null,
+  },
+  {
+    actions: {
+      sendToServer(me, change) {
+        axios.put('http://server.com/change', {change})
+          .then(me.$do.onSentChange)
+          .catch(me.$do.setSentError)
+      },
+      onSentChange(me, response){
+        me.$do.setCurrent(response.data);
+      },
+    }
+  });
+```
+
+If you want to keep track of the number of pending actions in the air,
+you can use a more complex form, and track each pending action with an ID.
+
+```javascript
+
+const myMirror = new Mirror(
+  {
+    current: 0,
+    nextChange: 0,
+    pending: new Set(),
+    sendError: null
+  },
+  {
+      actions: {
+        newPending(me, change, callback) {
+          me.$do.setNextChange(me.value.nextChange + 1);
+          let id = me.value.nextChange;
+          const pending = {change, id};
+          const nextSubmitted = new Set(my.value.pending);
+          nextSubmitted.add(pending);
+          me.$do.setPending(nextSubmitted);
+          callback(id);
+        },
+        sendToServer(me, change) {
+          let id = null;
+          me.$do.newPending(change, (nextId) => {
+            id = nextId;
+          });
+          axios.put('http://server.com/change', {change})
+            .then((response) => me.$do.onSentChange(response, id))
+            .catch((err) => me.$do.onError(err, id));
+        },
+        onError(me, err, id) {
+          me.$do.removePending(id);
+          me.$do.setSendError(err);
+        },
+        onSentChange(me, response, id){
+          me.$do.removePending(id);
+          me.$do.setCurrent(response.data);
+        },
+        removePending(me, id) {
+          const pendingChanges = Array.from(me.value.pending.values()).filter((value) => value !== id);
+          me.$do.setPending(new Set(pendingChanges));
+        }
+  }
+});
+
+```
+
+### Nesting Actions
+
+Actions can even call other actions. So you can create a complex nested series of updates, and their effects
+are buffered internally until all actions complete.
+
+### Errors in actions
+
+An un-trapped error in an action will flush all pending changes that were made after it started, and will be thrown.
+this means, for instance, you can call an action from another action, catch any error around that call, and be
+confident that the state of the mirror is unchanged; i.e., all buffered changes to date from other activity in the action
+is the same, *but* all changes from the subaction have been cleared.
+
+## Validation tests
 
 Validation tests are designed to reject bad candidates for change. "Bad" can mean wrong type, but can also
 relate to other properties of the mirror or external factors. 
@@ -93,16 +257,18 @@ console.log('value: ', numeric.value.number); // 'value: 2'
 
 ```
 
-If your mirror has one (or more) tests, it will reject values that emit/return errors from the test function.
+If your mirror has one (or more) tests, it will reject values that emit/return errors from the test function, 
+and throw when they occur.
 
-Every time a Mirror's value is submitted (via next(nextValue)), the update event queue 
-polls any errors returned/thrown from any test present in the mirror.  
+Every time a Mirror's value is submitted (via next(nextValue)), the update event queue polls any errors 
+returned/thrown from any test present in the mirror.  
 If that function (exists and) returns / throws errors, then the submitted value is silently rejected 
 and no observed notification occurs. 
 
-If the next value contains keys of managed children, those children are passed trial values
-and tested. Any errors in a pending child value are treated as errors in the root and 
-both the parent and child values are flushed silently. 
+If the next value contains keys of managed children that differs from their current values, 
+those children are passed trial values and tested. 
+Any errors in a pending child value are treated as errors in the root 
+and both the parent and child values are flushed silently. 
 
 If the child values are good, they are committed, notifying any direct subscribers;
 then the parent is committed, notifying its subscribers of their updates. 
@@ -111,89 +277,34 @@ This careful cycle allows for fine-grained control of values and minimizes the p
 of bad values leaking through the system; "bad" is about more than base type (string, array, etc);
 it is also about any business logic (range, character count) you wish to enforce.
 
-Validation can be used to enforce type on field values; it can also be used to enforce larger business 
-logic concerns. 
+Validation can be used to enforce type on field values; it can also be used to enforce larger business logic concerns. 
 
 Validation errors throw; however they do not terminate the Mirror (an RxJS-ism) or trigger any notification to any subscribers. 
 
-## Actions
+## Cleaners
 
-Actions are functions that you can run to enact change on Mirror instances. 
+Cleaners are pre-change transforming functions intended to remove simple input errors from change values; 
+for instance, rounding numbers down, trimming whitespace from strings, capitalization, string length enforcement. 
 
-They are for the most part identical to running an external function to change the mirrors' state; except,
-when an action is running *all subscription updates are suspended until the action completes (or errors out).*
-This means you can change the mirrors' value several times, and even change child mirror values,
-and only on the completion of the action are updates broadcast. 
-
-Actions do not return values. If you want to capture values generated inside an action 
-you need to pass a callback to the action and send it information from inside the action. 
-
-### Asynchronicity in actions
-
-Actions are synchronous by nature -- from the point of view of the mechanics of the Mirror system. 
-If you trigger any async/promise behavior inside an action it will complete -- but it will do so *after* the
-actions changes have been flushed/committed into the Mirror and any changed children. 
-
-The safest way to manage async in actions is to encase the async resolution (i.e., the then handler) 
-in a single separate action call for maximum containment: i.e., 
+* Cleaners execute **before** validators. which means that you shouldn't assume the value input to them has passed validation. 
+* Cleaners execute **before** values are passed upwards to any children, and don't have access to the Mirror, by intent
+* Cleaner functions should **always return a value**; if the input is not valid, return the original value.
+* Let upcoming validation inform the user of the validation errors.
+* Thrown errors in cleaners will stop the update and be passed on to the calling context. (this should not be done intentionally; use validators for this purpose)
 
 ```javascript
+  const mir = new Mirror(4, {
+    cleaner(value) {
+      if (typeof value === 'number') {
+        return Math.floor(value);
+      }
+      return value;
+    },
+  });
+  mir.subscribe((v) => console.log(v));
 
-let changeId = 0;
-const myMirror = new Mirror(
-  {
-    current: 0,
-    pending: new Set(),
-  },
-  {
-      actions: {
-        newPending(change, callback) {
-          changeId += 1;
-          let id = changeId;
-          const pending = {change, id};
-          const nextSubmitted = new Set(my.value.pending);
-          nextSubmitted.add(pending);
-          me.$do.setPending(nextSubmitted);
-          callback(id);
-        },
-        sendToServer(me, change) {
-          let id = null;
-          me.$do.newPending(change, (nextId) => {
-            id = nextId;
-          });
-          axios.put('http://server.com/change', {change})
-            .then((response) => me.$do.acceptChange(response, id))
-            .catch((err) => me.$do.removePending(id));
-        },
-        acceptChange(me, response, id){
-          me.$do.removePending(id);
-          if (me.current !== response.data) {
-            me.$do.setCurrent(response.data);
-          }
-        },
-        removePending(me, id) {
-          const pendingChanges = Array.from(me.value.pending.values());
-          const without = pendingChanges.filter((change) => change.id !== id);
-          if (without.length < pendingChanges.length) {
-            me.$do.setPending(new Set(pendingChanges));
-          }
-        }
-  }
-});
-
+  mir.next(8.2);
 ```
-
-## Nesting Actions 
-
-Actions can even call other actions. So you can create a complex nested series of updates, and their effects
-are buffered internally until all actions complete.
-
-### Errors in actions
-
-An un-trapped error in an action will flush all pending changes that were made after it started, and will be thrown. 
-this means, for instance, you can call an action from another action, catch any error around that call, and be 
-confident that the state of the mirror is unchanged; i.e., all buffered changes to date from other activity in the action
-is the same, *but* all changes from the subaction have been cleared.
 
 ## The buffer (a very technical detail)
 
@@ -222,10 +333,6 @@ export default function BoundLogin () {
   const [fieldMirror, setFieldMirror] = useState(false);
   useEffect(() => {
     const mirror = new Mirror({userName: '', password: ''}, {
-      test({userName, password}) {
-        if (typeof userName !== 'string') return 'userName must be a string';
-        if (typeof password !== 'string') return 'password must be a string';
-      },
       subjects: {
         complete({userName, password})  {
           return userName && password;
@@ -242,8 +349,8 @@ export default function BoundLogin () {
   []);
   
   if (values && fieldMirror) {
-    const {setUserName, setPassword} = fieldMirror.$do; // don't directly bind $do
-    return <Login {...values} setUserName={setUserName} setPassword={setPassword} />;
+    // don't directly bind $do
+    return <Login {...values} setUserName={fieldMirror.$do.setUserName} setPassword={fieldMirror.$do.setPassword} />;
   }
 }
 

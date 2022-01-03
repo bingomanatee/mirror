@@ -6,15 +6,16 @@ import {
   EVENT_TYPE_FLUSH_ACTIVE,
   EVENT_TYPE_DEBUG,
   EVENT_TYPE_NEXT,
-  EVENT_TYPE_VALIDATE, TYPE_MAP, TYPE_OBJECT, TYPE_ARRAY,
+  EVENT_TYPE_VALIDATE, TYPE_MAP, TYPE_OBJECT, TYPE_ARRAY, EVENT_TYPE_CLEAN,
 } from './constants';
 import {
-  isObj, isFn, asImmer, isStr, e, produce, typeOfValue,
+  isObj, isFn, asImmer, isStr, e, produce, typeOfValue, toMap,
 } from './utils';
 import propsMixin from './propsMixin';
 import childMixin from './childMixin';
+import cleanMixin from './cleanMixin';
 
-export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin(BehaviorSubject)))) {
+export default class Mirror extends childMixin(cleanMixin(propsMixin(actionMixin(eventMixin(BehaviorSubject))))) {
   constructor(value, config) {
     super(asImmer(value), config);
     this.$_config(config);
@@ -29,6 +30,7 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
       test,
       name,
       debug = false,
+      cleaners,
     } = config;
 
     if (isFn(test)) {
@@ -36,6 +38,14 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
     }
     this.$name = isStr(name, true) ? name : idGen();
     this.$_debug = debug;
+
+    if (isObj(cleaners)) {
+      toMap(cleaners).forEach((fn, cleanerField) => {
+        if (!this.$hasChild(cleanerField)) {
+          this.$addChild(cleanerField, this.$get(cleanerField), { cleaner: fn });
+        }
+      });
+    }
   }
 
   get $debug() {
@@ -48,6 +58,7 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
     return false;
   }
 
+  // a debugging aid
   $note(msg, value = null) {
     if (this.$debug) {
       if (this.$debug > 1) {
@@ -66,40 +77,43 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
    * @param values
    * @param offset
    */
-  update(values, offset = 0) {
+  $update(values, offset = 0) {
     const type = this.$type;
     const valueType = typeOfValue(values);
+
     if (valueType !== type) {
       throw e('Bad update:', {
         values,
         target: this,
+        expectedType: type,
         valueType,
       });
     }
 
     if (![TYPE_MAP, TYPE_OBJECT, TYPE_ARRAY].includes(type)) {
-      throw new Error('bad type for update: ', {
+      console.warn('bad type for update: ', {
         target: this,
         type,
       });
+      return this.next(values);
     }
 
     const next = produce(this.value, (draft) => {
       switch (type) {
-        case 'map':
+        case TYPE_MAP:
           values.forEach((keyValue, key) => {
             draft.set(key, keyValue);
           });
           break;
 
-        case 'object':
+        case TYPE_OBJECT:
           Object.keys(values)
             .forEach((key) => {
               draft[key] = values[key];
             });
           break;
 
-        case 'array':
+        case TYPE_ARRAY:
           values.forEach((item, index) => {
             draft[index + offset] = item;
           });
@@ -107,11 +121,15 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
       }
     });
 
-    this.next(next);
+    return this.next(next);
   }
 
   next(value) {
-    let change = value;
+    const sanEvent = this.$send(EVENT_TYPE_CLEAN, value);
+    if (sanEvent.hasError) {
+      throw e('cleaning error for next value', { target: this, value, error: sanEvent.thrownError });
+    }
+    let change = sanEvent.value;
     const evt = this.$send(EVENT_TYPE_NEXT, change);
     if (this.$_hasChildren) {
       change = this.$_withChildValues(change);
@@ -128,6 +146,14 @@ export default class Mirror extends childMixin(propsMixin(actionMixin(eventMixin
   }
 
   $addTest(handler) {
+    /**
+     * note - validate is a trigger to validate the mirror's current value;
+     * if it is invalid, validate the changeEvent.
+     * changeEvent may come from elsewhere
+     * and its manifest may be relevant to a different target.
+     *
+     * On an error, invalidate the change event.
+     */
     return this.$on(EVENT_TYPE_VALIDATE, (changeEvent, evt, tgt) => {
       if (!changeEvent.isStopped) {
         const value = tgt.getValue();
