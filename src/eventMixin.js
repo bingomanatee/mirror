@@ -158,7 +158,7 @@ export default (BaseClass) => class WithEvents extends BaseClass {
 
   /**
    *
-   * @param type {scalar} the event type
+   * @param type {string|Symbol} the event type
    * @param value {any} the data / config of the event
    * @param forceComplete {boolean}
    * @returns {MirrorEvent}
