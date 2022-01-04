@@ -1,17 +1,26 @@
 # Mirror
 
-Mirror creates subscribable objects. This README will be expanded on
-more completely after Mirror has advanced out of Alpha. At this moment
-Mirror is still under heavy development 
-and is decidedly ***NOT ready for use in production***
+Mirror is a transactional state system for client side applications. It is designed to produce scalable, 
+testable and clean data change management for complex applications. And let's be honest, all applications
+end up pretty complex and require testing. 
+
+Mirror is for anyone who has been:
+
+* Added Redux to a React app and found the boilerplate unnerving
+* Tired of using one state system for local changes and another one for global state
+* Attempted to test a Redux driven app and found important functionality buried in closure
+* Needs to do validation checks that go beyond simple type 
 
 ## Mirrors
 
-A Mirror is a subscribable change engine; it has value(s), built-in and custom change actions, can be subscribed to 
-to receive updates.
+A Mirror is a subscribable change engine; it has value(s), built-in and custom change actions,
+pre-change sanitizers and validation hooks, and leverages Immer for immutability.
 
 A Mirror is designed to allow validation -- that is -- invalid formats are banned from submission and 
 do not trigger subscriber notifications (or crash the subject). 
+
+It also allows for sanitizing input -- you can write input filters that clean input to prevent simple
+mistakes or enforce things like rounding and string formatting.
 
 Also, Mirrors have a transactional update cycle, in which a variety of child values and sub-values
 can be updated in a single update cycle. This allows the mirrors and any child mirrors to be
@@ -305,6 +314,18 @@ for instance, rounding numbers down, trimming whitespace from strings, capitaliz
 
   mir.next(8.2);
 ```
+
+## Children
+
+fields of Mirror values can be delegated to child Mirrors. Mirror children can have their own validators, clean functions,
+actions and other configuration. in fact, using `tests` or `cleaners` in configuration will automatically spawn child mirrors. 
+
+Child mirrors are locked in the transactionality of their parents; if they are (directly or indirectly) changed in 
+the context of a parent action, their values will be buffered (see below) until the completion of the action, 
+or will flush if an un-trapped error occurs in the action. 
+
+Children can be added via the 'children' configuration field, or the `instance.$addChild(name, child)` method. 
+
 
 ## The buffer (a very technical detail)
 

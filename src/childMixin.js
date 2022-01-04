@@ -179,4 +179,31 @@ export default (BaseClass) => class WithChildren extends BaseClass {
       }
     }
   }
+
+  $removeChild(name, removeValue = true) {
+    if (!this.$hasChild(name)) {
+      return;
+    }
+    const child = this.$children.get(name);
+
+    this.$children.remove(name);
+
+    if (removeValue) {
+      this.$mutate((value) => {
+        switch (this.$type) {
+          case TYPE_OBJECT:
+            delete value[name];
+            break;
+
+          case TYPE_MAP:
+            value.delete(name);
+            break;
+        }
+      });
+    }
+
+    child.complete();
+
+    return child;
+  }
 };
