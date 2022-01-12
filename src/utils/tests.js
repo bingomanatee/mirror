@@ -12,8 +12,11 @@ export function isThere(item) {
 }
 
 export function ucFirst(str) {
-  if (!isStr(str, true)) return '';
-  return str.charAt(0).toUpperCase() + str.slice(1);
+  if (!isStr(str, true)) {
+    return '';
+  }
+  return str.charAt(0)
+    .toUpperCase() + str.slice(1);
 }
 
 /**
@@ -113,6 +116,60 @@ export function hasKey(value, key, vType = null) {
 }
 
 export function isWhole(value) {
-  if (!isNumber(value)) return false;
+  if (!isNumber(value)) {
+    return false;
+  }
   return (value >= 0) && !(value % 2);
+}
+
+export function amend(value, values, type = ABSENT) {
+  if (!isThere(type)) {
+    type = typeOfValue(value);
+  }
+  let out = value;
+  switch (type) {
+    case TYPE_MAP:
+      out = new Map(value);
+      values.forEach((keyValue, key) => {
+        out.set(key, keyValue);
+      });
+      break;
+
+    case TYPE_OBJECT:
+      out = { ...value };
+      Object.keys(values)
+        .forEach((key) => {
+          out[key] = values[key];
+        });
+      break;
+
+    case TYPE_ARRAY:
+      out = [...value];
+      values.forEach((item, index) => {
+        out[index] = item;
+      });
+      break;
+  }
+  return out;
+}
+
+export function clone(value, type = ABSENT) {
+  if (!isThere(type)) {
+    type = typeOfValue(value);
+  }
+  let out = value;
+  switch (type) {
+    case TYPE_MAP:
+      out = new Map(value);
+      break;
+
+    case TYPE_OBJECT:
+      out = { ...value };
+      break;
+
+    case TYPE_ARRAY:
+      out = [...value];
+      break;
+  }
+  return out;
 }

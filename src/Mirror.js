@@ -6,18 +6,18 @@ import {
   EVENT_TYPE_FLUSH_ACTIVE,
   EVENT_TYPE_DEBUG,
   EVENT_TYPE_NEXT,
-  EVENT_TYPE_VALIDATE, TYPE_MAP, TYPE_OBJECT, TYPE_ARRAY, EVENT_TYPE_CLEAN,
+  EVENT_TYPE_VALIDATE, TYPE_MAP, TYPE_OBJECT, TYPE_ARRAY, EVENT_TYPE_CLEAN, ABSENT,
 } from './constants';
 import {
-  isObj, isFn, asImmer, isStr, e, produce, typeOfValue, toMap,
+  isObj, isFn, asImmer, isStr, e, produce, typeOfValue, toMap, amend, lGet,
 } from './utils';
 import propsMixin from './propsMixin';
 import childMixin from './childMixin';
 import cleanMixin from './cleanMixin';
 
 export default class Mirror extends childMixin(cleanMixin(propsMixin(actionMixin(eventMixin(BehaviorSubject))))) {
-  constructor(value, config) {
-    super(asImmer(value), config);
+  constructor(value, config = {}) {
+    super(lGet(config, 'mutable') ? value : asImmer(value), config);
     this.$_config(config);
   }
 
@@ -31,7 +31,10 @@ export default class Mirror extends childMixin(cleanMixin(propsMixin(actionMixin
       name,
       debug = false,
       cleaners,
+      mutable,
     } = config;
+
+    this.$_mutable = !!mutable;
 
     if (isFn(test)) {
       this.$addTest(test);
@@ -40,11 +43,12 @@ export default class Mirror extends childMixin(cleanMixin(propsMixin(actionMixin
     this.$_debug = debug;
 
     if (isObj(cleaners)) {
-      toMap(cleaners).forEach((fn, cleanerField) => {
-        if (!this.$hasChild(cleanerField)) {
-          this.$addChild(cleanerField, this.$get(cleanerField), { cleaner: fn });
-        }
-      });
+      toMap(cleaners)
+        .forEach((fn, cleanerField) => {
+          if (!this.$hasChild(cleanerField)) {
+            this.$addChild(cleanerField, this.$get(cleanerField), { cleaner: fn });
+          }
+        });
     }
   }
 
@@ -98,36 +102,47 @@ export default class Mirror extends childMixin(cleanMixin(propsMixin(actionMixin
       return this.next(values);
     }
 
-    const next = produce(this.value, (draft) => {
-      switch (type) {
-        case TYPE_MAP:
-          values.forEach((keyValue, key) => {
-            draft.set(key, keyValue);
-          });
-          break;
+    if (this.$_mutable) {
+      return this.next(amend(this.value, values));
+    }
 
-        case TYPE_OBJECT:
-          Object.keys(values)
-            .forEach((key) => {
-              draft[key] = values[key];
+    try {
+      const next = produce(this.value, (draft) => {
+        switch (type) {
+          case TYPE_MAP:
+            values.forEach((keyValue, key) => {
+              draft.set(key, keyValue);
             });
-          break;
+            break;
 
-        case TYPE_ARRAY:
-          values.forEach((item, index) => {
-            draft[index + offset] = item;
-          });
-          break;
-      }
-    });
+          case TYPE_OBJECT:
+            Object.keys(values)
+              .forEach((key) => {
+                draft[key] = values[key];
+              });
+            break;
 
-    return this.next(next);
+          case TYPE_ARRAY:
+            values.forEach((item, index) => {
+              draft[index + offset] = item;
+            });
+            break;
+        }
+      });
+      return this.next(next);
+    } catch (err) {
+      return this.next(amend(this.value, values));
+    }
   }
 
   next(value) {
     const sanEvent = this.$send(EVENT_TYPE_CLEAN, value);
     if (sanEvent.hasError) {
-      throw e('cleaning error for next value', { target: this, value, error: sanEvent.thrownError });
+      throw e('cleaning error for next value', {
+        target: this,
+        value,
+        error: sanEvent.thrownError,
+      });
     }
     let change = sanEvent.value;
     const evt = this.$send(EVENT_TYPE_NEXT, change);

@@ -3,7 +3,7 @@ import {
   EVENT_TYPE_NEXT, EVENT_TYPE_REMOVE_FROM, EVENT_TYPE_VALIDATE, TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT,
 } from './constants';
 import {
-  isObj, typeOfValue, hasKey, getKey, setKey, produce, isEqual,
+  isObj, typeOfValue, hasKey, getKey, setKey, produce, isEqual, clone,
 } from './utils';
 import { create, isMirror } from './utils/reflection';
 
@@ -110,17 +110,25 @@ export default (BaseClass) => class WithChildren extends BaseClass {
             try {
               setKey(target.$lastChange.value, key, value);
             } catch (err) {
-              target.$lastChange.value = produce(target.$lastChange.value, (draft) => {
-                setKey(draft, key, value);
-              });
+              if (target.$_mutable) {
+                target.$lastChange.value = setKey(target.$lastChange.value, key, value);
+              } else {
+                target.$lastChange.value = produce(target.$lastChange.value, (draft) => {
+                  setKey(draft, key, value);
+                });
+              }
             }
           }
         } else {
           const childValue = getKey(target.value, key);
           if (childValue !== value) {
-            target.next(produce(target.value, (draft) => {
-              setKey(draft, key, value);
-            }));
+            if (target.$_mutable) {
+              target.next(setKey(clone(target.value), key, value));
+            } else {
+              target.next(produce(target.value, (draft) => {
+                setKey(draft, key, value);
+              }));
+            }
           }
         }
       },
@@ -128,9 +136,11 @@ export default (BaseClass) => class WithChildren extends BaseClass {
   }
 
   $_withChildValues(value = ABSENT) {
+    let out = value;
     if (value === ABSENT) {
-      value = this._value;
+      out = this._value;
     }
+
 
     const type = typeOfValue(value);
 
@@ -138,15 +148,19 @@ export default (BaseClass) => class WithChildren extends BaseClass {
       this.$children.forEach((child, key) => {
         const childValue = child.value;
 
-        if (getKey(value, key, type) !== childValue) {
-          value = produce(value, (draft) => {
-            setKey(draft, key, childValue, type);
-          });
+        if (getKey(out, key, type) !== childValue) {
+          if (this.$_mutable) {
+            out = setKey(clone(out, type), key, childValue, type);
+          } else {
+            out = produce(out, (draft) => {
+              setKey(draft, key, childValue, type);
+            });
+          }
         }
       });
     }
 
-    return value;
+    return out;
   }
 
   $_configChildren(config) {

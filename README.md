@@ -430,6 +430,14 @@ That means if you want to update keys you must either:
 * call `myMirror.update({foo: 3})`; // will internally use immer to update your value, leaving other ones unchanged.
 * call set(s) as in `myMirror.$do.setFoo(3)` // generally easier unless you need to validate a set of changes in parallel
 
+#### Disabling Immer
+
+There are use cases for removing the immer integration; You are storing DOM or other complex objects in Mirrors,
+or instances from libraries that are not easily Immerable. 
+
+To disable Immer serialization, pass "mutable" as an option. Note, parent Mirrors will serialize all their children,
+but child mirrors can be Immered even if their parent is mutable. 
+
 ## And lastly -- what is with all the dollar signs?
 
 As Mirrors extend BehaviorSubjects, in order to minimize the possibility

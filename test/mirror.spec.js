@@ -95,6 +95,18 @@ tap.test(p.name, (suite) => {
       ut.end();
     });
 
+    mirTests.test('mutable', (mut) => {
+      const mir = new Subject({ a: 1, b: 2 }, { mutable: true });
+
+      const { value } = mir;
+
+      value.c = 3;
+
+      mut.same(mir.value.c, 3);
+
+      mut.end();
+    });
+
     mirTests.end();
   });
 

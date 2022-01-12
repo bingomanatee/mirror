@@ -1,9 +1,5 @@
-import {
-  EVENT_TYPE_SET, TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT,
-} from './constants';
-import {
-  toMap, isObj, isWhole, produce, typeOfValue, isFn, isStr, e, getKey,
-} from './utils';
+import { TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT, } from './constants';
+import { clone, e, getKey, isFn, isObj, isStr, isWhole, produce, setKey, toMap, typeOfValue, } from './utils';
 
 export default (BaseClass) => class WithProps extends BaseClass {
   constructor(val, config, ...args) {
@@ -40,28 +36,14 @@ export default (BaseClass) => class WithProps extends BaseClass {
   $set(key, value) {
     const myKey = this.$keyFor(key);
 
-    let next = this.value;
-    switch (this.$type) {
-      case TYPE_OBJECT:
-        next = produce(next, (draft) => {
-          draft[myKey] = value;
-        });
-        break;
+    let next = this.$_mutable ? clone(this.value) : this.value;
 
-      case TYPE_MAP:
-        next = produce(next, (draft) => {
-          draft.set(myKey, value);
-        });
-        break;
-
-      case TYPE_ARRAY:
-        next = produce(next, (draft) => {
-          draft[myKey] = value;
-        });
-        break;
-
-      default:
-        throw e('$set is not appropriate for this type of target', { key, value, target: this });
+    if (this.$_mutable) {
+      setKey(next, myKey, value);
+    } else {
+      next = produce(next, (draft) => {
+        setKey(draft, myKey, value);
+      });
     }
     this.next(next);
   }
@@ -136,30 +118,28 @@ export default (BaseClass) => class WithProps extends BaseClass {
     if (!this.$_hasSelectors) return value;
     const target = this;
     const valueType = typeOfValue(value);
-    const withSel = produce(value, (draft) => {
+
+    if (!this.$_mutable) {
+      const out = clone(value);
+      this.$_selectors.forEach((fn, name) => {
+        try {
+          const selValue = fn(value, target, name);
+          setKey(out, name, selValue, valueType);
+        } catch (err) {
+          console.warn('cannot compute ', name, ':', err);
+        }
+      });
+      return out;
+    }
+    return produce(value, (draft) => {
       target.$_selectors.forEach((fn, name) => {
         try {
           const selValue = fn(value, target, name);
-          switch (valueType) {
-            case TYPE_MAP:
-              draft.set(name, selValue);
-              break;
-
-            case TYPE_OBJECT:
-              draft[name] = selValue;
-              break;
-
-            case TYPE_ARRAY:
-              draft[name] = selValue;
-            default:
-              // no set
-          }
+          setKey(draft, name, selValue, valueType);
         } catch (err) {
           console.warn('cannot compute ', name, ':', err);
         }
       });
     });
-
-    return withSel;
   }
 };

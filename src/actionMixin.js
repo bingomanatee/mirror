@@ -2,7 +2,9 @@ import produce from 'immer';
 import {
   EVENT_TYPE_ACTION, EVENT_TYPE_FLUSH_ACTIVE, TYPE_ARRAY, TYPE_MAP, TYPE_OBJECT,
 } from './constants';
-import { isFn, isObj } from './utils';
+import {
+  clone, e, isFn, isObj,
+} from './utils';
 import { makeDoObj, makeDoProxy } from './mirrorMisc';
 
 export default (BaseClass) => class WithActions extends BaseClass {
@@ -80,25 +82,18 @@ export default (BaseClass) => class WithActions extends BaseClass {
       throw e('$mutate expects function', { source: '$mutate', fn });
     }
 
-    let { value } = this;
-
-    switch (this.$type) {
-      case TYPE_OBJECT:
-        value = produce(this.value, fn);
-        break;
-
-      case TYPE_ARRAY:
-        value = produce(this.value, fn);
-        break;
-
-      case TYPE_MAP:
-        value = produce(this.value, fn);
-        break;
-
-      default:
-        value = fn(value);
+    if (this.$_mutable) {
+      return this.next(fn(clone(this.value)));
     }
 
-    this.next(value);
+    let next = this.value;
+
+    try {
+      next = produce(this.value, fn);
+    } catch (err) {
+      next = this.next(fn(clone(this.value)));
+    }
+
+    this.next(next);
   }
 };
