@@ -1,8 +1,6 @@
-import tap from 'tap';
-import watch from '../watch';
-import watchAll from '../watchAll';
-
-const { inspect } = require('util');
+const tap = require('tap');
+const watch = require('../watch');
+const watchAll = require('../watchAll');
 const p = require('../package.json');
 
 const subjectName = 'Mirror';
@@ -22,7 +20,8 @@ tap.test(p.name, (suite) => {
   suite.test(`${subjectName}/children`, (childTests) => {
     childTests.test('basic set', (bs) => {
       const m = new Subject({
-        alphaField: 0, betaField: 0,
+        alphaField: 0,
+        betaField: 0,
       }, {
         name: 'ROOT',
         debug: true,
@@ -36,27 +35,63 @@ tap.test(p.name, (suite) => {
 
       const [{ history: allHistory }] = watchAll(m);
 
-      m.next({ alphaField: 2, betaField: 4 });
-      bs.same(m.value, { alphaField: 2, betaField: 4 });
+      m.next({
+        alphaField: 2,
+        betaField: 4
+      });
+      bs.same(m.value, {
+        alphaField: 2,
+        betaField: 4
+      });
       bs.same(m.$children.get('alphaField').value, 2);
-      bs.same(history, [{ alphaField: 0, betaField: 0 }, { alphaField: 2, betaField: 4 }]);
+      bs.same(history, [{
+        alphaField: 0,
+        betaField: 0
+      }, {
+        alphaField: 2,
+        betaField: 4
+      }]);
       bs.same(m.$children.get('alphaField').$_changeBuffer, []);
       bs.same(m.$children.get('betaField').$_changeBuffer, []);
 
       let err = null;
       try {
-        m.next({ alphaField: 'five', betaField: 6 });
+        m.next({
+          alphaField: 'five',
+          betaField: 6
+        });
       } catch (e) {
         err = e;
       }
-      bs.same(err, { error: NAN, target: 'alphaField' });
+      bs.same(err, {
+        error: NAN,
+        target: 'alphaField'
+      });
       // console.log('--- basic set -- error:', inspect(allHistory, { depth: 5 }));
-      bs.same(history, [{ alphaField: 0, betaField: 0 }, { alphaField: 2, betaField: 4 }]);
+      bs.same(history, [{
+        alphaField: 0,
+        betaField: 0
+      }, {
+        alphaField: 2,
+        betaField: 4
+      }]);
       bs.same(m.value.alphaField, 2);
       bs.same(m.value.betaField, 4);
 
-      m.next({ alphaField: 10, betaField: 20 });
-      bs.same(history, [{ alphaField: 0, betaField: 0 }, { alphaField: 2, betaField: 4 }, { alphaField: 10, betaField: 20 }]);
+      m.next({
+        alphaField: 10,
+        betaField: 20
+      });
+      bs.same(history, [{
+        alphaField: 0,
+        betaField: 0
+      }, {
+        alphaField: 2,
+        betaField: 4
+      }, {
+        alphaField: 10,
+        betaField: 20
+      }]);
       bs.same(m.value.alphaField, 10);
       bs.same(m.value.betaField, 20);
       bs.end();
@@ -64,7 +99,8 @@ tap.test(p.name, (suite) => {
 
     childTests.test('root updates when child changed', (cc) => {
       const m = new Subject({
-        alphaField: 0, betaField: 0,
+        alphaField: 0,
+        betaField: 0,
       }, {
         name: 'ROOT',
         debug: true,
@@ -78,7 +114,8 @@ tap.test(p.name, (suite) => {
 
       const [{ history: allHistory }] = watchAll(m);
 
-      m.$children.get('alphaField').next(20);
+      m.$children.get('alphaField')
+        .next(20);
 
       cc.same(m.value.alphaField, 20);
       cc.end();

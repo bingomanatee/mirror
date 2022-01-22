@@ -1,4 +1,5 @@
-import tap from 'tap';
+const tap = require('tap');
+const watch = require("../watch");
 
 const p = require('../package.json');
 

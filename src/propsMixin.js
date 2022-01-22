@@ -127,6 +127,7 @@ export default (BaseClass) => class WithProps extends BaseClass {
           setKey(out, name, selValue, valueType);
         } catch (err) {
           console.warn('cannot compute ', name, ':', err);
+          setKey(out, name, {$error: err});
         }
       });
       return out;

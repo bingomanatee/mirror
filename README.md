@@ -290,6 +290,40 @@ Validation can be used to enforce type on field values; it can also be used to e
 
 Validation errors throw; however they do not terminate the Mirror (an RxJS-ism) or trigger any notification to any subscribers. 
 
+## Selectors
+
+Selectors are functions that run every time a mirror's value is updated and whose return
+value is appended to the value prior to return. Selectors must be synchronous. 
+
+Each selector is passed (value, mirror) as arguments. Selectors should NOT call any
+methods of the mirror that changes the mirrors' structure or triggers a value update. 
+
+selectors are only relevant for Object and Map - type values. 
+
+```javascript
+
+const m = new Mirror({ x: 1, y: 2 }, {
+  name: 'point',
+  selectors: {
+    mag(value) {
+      return Math.sqrt(value.x ** 2 + value.y ** 2);
+    },
+  },
+});
+
+console.log('mirror value:', m.value); // {x: 1, y: 2, mag: 2.23606797749979}
+
+m.$do.setX(2);
+console.log('mirror value:', m.value); // {x: 2, y: 2, mag: 2.8284271247461903}
+
+```
+
+Selectors should be relatively light-weight; if you have a process-intensive calculus to 
+run, consider using a web worker or a discrete debounced RxJS stream.
+
+If a selector function throws an uncaught error, it will return an object `{$error: err}` in the place
+of the selector value. 
+
 ## Cleaners
 
 Cleaners are pre-change transforming functions intended to remove simple input errors from change values; 
