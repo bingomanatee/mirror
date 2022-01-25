@@ -1,12 +1,17 @@
 {
   "extends": ["airbnb"],
-  "parser": "babel-eslint",
+  "parser": "@babel/eslint-parser",
   "plugins": [],
   "env": {
     "node": true,
     "browser": true,
     "mocha": true,
     "mongo": true
+  },
+  "parserOptions": {
+    "requireConfigFile": false,
+    "babelOptions": {
+    }
   },
   "rules": {
     "max-len": [2, { "code": 120 }],
@@ -22,6 +27,7 @@
     "react/sort-comp": 0,
     "react/react-in-jsx-scope": 0,
     "no-return-await": 0,
+    "template-curly-spacing" : "off",
     "jsx-a11y/click-events-have-key-events": 0
   }
 }

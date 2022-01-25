@@ -119,7 +119,7 @@ export default (BaseClass) => class WithProps extends BaseClass {
     const target = this;
     const valueType = typeOfValue(value);
 
-    if (!this.$_mutable) {
+    if (this.$_mutable) {
       const out = clone(value);
       this.$_selectors.forEach((fn, name) => {
         try {

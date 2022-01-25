@@ -5,20 +5,27 @@ import {
 import {
   clone, e, isFn, isObj,
 } from './utils';
-import { makeDoObj, makeDoProxy } from './mirrorMisc';
+import { makeDoProxy } from './mirrorMisc';
 
 export default (BaseClass) => class WithActions extends BaseClass {
   constructor(value, config, ...rest) {
     super(value, config, ...rest);
 
-    config && this.$_configActions(config);
+    this.$_configActions(config);
 
-    this.$on(EVENT_TYPE_ACTION, ({ fn, args }, evt, target) => {
+    this.$on(EVENT_TYPE_ACTION, ({
+      fn,
+      args,
+    }, evt, target) => {
       if (!evt.isStopped) {
         target.$_addToChangeBuffer(evt);
 
         try {
-          fn(target, ...args);
+          const result = fn(target, ...args);
+          evt.value = {
+            ...evt.value,
+            result,
+          };
         } catch (err) {
           evt.error(err);
         }
@@ -36,7 +43,10 @@ export default (BaseClass) => class WithActions extends BaseClass {
   }
 
   get $isInAction() {
-    const action = this.$_allBuffers.find(({ type, committed }) => (!committed) && (type === EVENT_TYPE_ACTION));
+    const action = this.$_allBuffers.find(({
+      type,
+      committed,
+    }) => (!committed) && (type === EVENT_TYPE_ACTION));
     return !!action;
   }
 
@@ -52,7 +62,10 @@ export default (BaseClass) => class WithActions extends BaseClass {
       fn,
       args,
     }, true);
-    if (evt.hasError) throw evt.thrownError;
+    if (evt.hasError) {
+      throw evt.thrownError;
+    }
+    return evt.value.result;
   }
 
   get $do() {
@@ -79,7 +92,10 @@ export default (BaseClass) => class WithActions extends BaseClass {
 
   $mutate(fn) {
     if (!isFn(fn)) {
-      throw e('$mutate expects function', { source: '$mutate', fn });
+      throw e('$mutate expects function', {
+        source: '$mutate',
+        fn,
+      });
     }
 
     if (this.$_mutable) {
