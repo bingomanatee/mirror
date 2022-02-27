@@ -52,6 +52,28 @@ an action `myMirror.$do.setX(10)` and `myMirror.$do.setY(20)`.
 
 Complex objects will be expressed as Immerable instances and therefore are immutable. 
 
+### Mutability 
+
+Mirror uses Immer to keep its state immutable -- by default. This means its best to have basic 
+tress of data in mirror: as above -- scalars, Maps, Sets, Arrays, Objects, and Date instances. 
+
+However you can configure mirrors to *ignore* this mandate and open your state to anything else.
+(typical anything else's -- DOM nodes, database connectors, streams, video data, buffers...)
+
+A mutable mirror cannot have immutable children, but not vice versa; if a given
+Mirror is mutable, its child mirrors must be as well. (see below)
+
+### Assets
+
+One work-around for mutability is a Mirror's Assets. Mirrors' assets can be 
+of any type and nature, stored in its $assets property. A typical $asset would be a
+database connection, DOM node, or whatever problematic sorts of stuff that you don't 
+want to follow the mutability rules of state. Updating an asset doesn't send out any event
+or update a state. Assets are loosely defined by design. 
+
+While assets were conceived of as being defined in the constructor, 
+you can set an asset at any point using `myMirror.$setAsset(name, value)`.
+
 ## Subscriptions 
 
 Getting updates from a Mirror follows the standard observable pattern: 
@@ -72,7 +94,7 @@ myMirror.next(5);
 
 ````
 
-more formally you can `subscribe({next(value) {...}}`.
+more formally you can `subscribe({next(value) {...}})`.
 
 note, subscriptions are cancellable; this is important for situations where the mirrors; lifespan is longer
 than the lifespan of the observation. 
@@ -300,6 +322,8 @@ methods of the mirror that changes the mirrors' structure or triggers a value up
 
 selectors are only relevant for Object and Map - type values. 
 
+Selectors must be immerable, unless the state itself is mutable. 
+
 ```javascript
 
 const m = new Mirror({ x: 1, y: 2 }, {
@@ -348,6 +372,27 @@ for instance, rounding numbers down, trimming whitespace from strings, capitaliz
 
   mir.next(8.2);
 ```
+
+## Configuration 
+
+The second value of a Mirror's constructor are its configuration. 
+
+This is a POJO object; it, and all of its keys, are optional. 
+
+Here are the possible values of the configuration object: 
+
+* `actions` **Object<string>:<function>** a collection of callable actions (see above). 
+* `mutable` **boolean: default false** whether the Immer library should be used to freeze the Mirrors' state. 
+* `children` **Object or Map<string>:<value|Mirror instance>** predefined children (see below). 
+* `cleaner` **function(<value>): <value>): <value> default null** a function that cleans up input (see above). 
+* `test` **function(value):<error>: default null** a function that will *block* any submitted value if it returns any 
+  truthy result (such as an error or string). 
+* `name` **string** an identifier for the mirror; used in debugging - has no effect on eecution. 
+* `debug` **boolean default false** used to turn off various internal messages for debugging Mirror itself. 
+  No guarantee of functionality is assigned to its use. 
+* `cleaners` - distributes cleaners across a set of children. Note - this method will force-create
+  a child for every named cleaner if necessary. 
+* `assets` **Object** a set of resources stored apart from state - see Assets
 
 ## Children
 

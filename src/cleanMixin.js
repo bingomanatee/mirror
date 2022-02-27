@@ -16,8 +16,6 @@ export default (BaseClass) => class WithClean extends BaseClass {
     if (!isObj(config)) return;
     const { cleaner } = config;
     if (cleaner) this.$addCleaner(cleaner);
-
-    // note -- multiple clenaers added in core Mirror
   }
 
   $addCleaner(handler) {

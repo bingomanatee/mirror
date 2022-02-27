@@ -9,7 +9,7 @@ import {
   EVENT_TYPE_VALIDATE, TYPE_MAP, TYPE_OBJECT, TYPE_ARRAY, EVENT_TYPE_CLEAN, ABSENT,
 } from './constants';
 import {
-  isObj, isFn, asImmer, isStr, e, produce, typeOfValue, toMap, amend, lGet,
+  isObj, isFn, asImmer, isStr, e, produce, typeOfValue, toMap, amend, lGet, isThere,
 } from './utils';
 import propsMixin from './propsMixin';
 import childMixin from './childMixin';
@@ -32,6 +32,7 @@ export default class Mirror extends childMixin(cleanMixin(propsMixin(actionMixin
       debug = false,
       cleaners,
       mutable,
+      assets,
     } = config;
 
     this.$_mutable = !!mutable;
@@ -47,9 +48,47 @@ export default class Mirror extends childMixin(cleanMixin(propsMixin(actionMixin
         .forEach((fn, cleanerField) => {
           if (!this.$hasChild(cleanerField)) {
             this.$addChild(cleanerField, this.$get(cleanerField), { cleaner: fn });
+          } else {
+            this.$children.get(cleanerField).$addCleaner(fn);
           }
         });
     }
+
+    if (isObj(assets)) {
+      this.$_assets = { ...assets };
+    }
+  }
+
+  /**
+   * Assets are any meatadata - libraries, constants, functions --
+   * that are probably not immutable or part of state directly --
+   * that the mirror needs to operate. Database connections, DOM nodes or other arbitrary resources.
+   * Assets primarily exist to sidestep the rigid criteria of Immutable to provide
+   * values a mirror can access, but that it doesn't need to trace state with.
+   * @returns {Object}
+   */
+  get $assets() {
+    if (!this.$_assets) {
+      this.$_assets = {};
+    }
+    return this.$_assets;
+  }
+
+  $setAsset(name, value) {
+    this.$assets[name] = value;
+    return this;
+  }
+
+  $_hasAssets() {
+    return isThere(this.$_assets);
+  }
+
+  $asset(name) {
+    if (!this.$_hasAssets) return null;
+    if (!(name in this.$assets)) {
+      return null;
+    }
+    return this.$asset[name];
   }
 
   get $debug() {

@@ -7,3 +7,8 @@ alpha - validating basic utility
 allowing return values from actions -- not tested yet
 fixed mutable not working properly with selectors
 updated rollup, dependencies
+
+## 0.1.9
+
+* Added the $asset as a workaround for mutability. 
+* Upgraded $_withChildren for a more economic blend of data

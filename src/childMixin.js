@@ -11,7 +11,7 @@ export default (BaseClass) => class WithChildren extends BaseClass {
   constructor(value, config, ...args) {
     super(value, config, ...args);
 
-    config && this.$_configChildren(config);
+    this.$_configChildren(config);
 
     this.$on(EVENT_TYPE_NEXT, (nextValue, evt, target) => {
       if (!target.$_hasChildren) {
@@ -135,29 +135,37 @@ export default (BaseClass) => class WithChildren extends BaseClass {
     });
   }
 
+  /**
+   * blends the childrens' values into a state; by default, the current state.
+   * @param value
+   * @returns {*|symbol}
+   */
   $_withChildValues(value = ABSENT) {
     let out = value;
     if (value === ABSENT) {
       out = this._value;
     }
 
-
     const type = typeOfValue(value);
-
     if (this.$_hasChildren) {
-      this.$children.forEach((child, key) => {
-        const childValue = child.value;
-
-        if (getKey(out, key, type) !== childValue) {
-          if (this.$_mutable) {
+      if (this.$_mutable) {
+        this.$children.forEach((child, key) => {
+          const childValue = child.value;
+          if (getKey(out, key, type) !== childValue) {
             out = setKey(clone(out, type), key, childValue, type);
-          } else {
-            out = produce(out, (draft) => {
-              setKey(draft, key, childValue, type);
-            });
           }
-        }
-      });
+        });
+      } else {
+        out = produce(out, (draft) => {
+          this.$children.forEach((child, key) => {
+            const childValue = child.value;
+
+            if (getKey(out, key, type) !== childValue) {
+              setKey(draft, key, childValue, type);
+            }
+          });
+        });
+      }
     }
 
     return out;
