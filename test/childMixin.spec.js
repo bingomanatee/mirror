@@ -37,19 +37,19 @@ tap.test(p.name, (suite) => {
 
       m.next({
         alphaField: 2,
-        betaField: 4
+        betaField: 4,
       });
       bs.same(m.value, {
         alphaField: 2,
-        betaField: 4
+        betaField: 4,
       });
       bs.same(m.$children.get('alphaField').value, 2);
       bs.same(history, [{
         alphaField: 0,
-        betaField: 0
+        betaField: 0,
       }, {
         alphaField: 2,
-        betaField: 4
+        betaField: 4,
       }]);
       bs.same(m.$children.get('alphaField').$_changeBuffer, []);
       bs.same(m.$children.get('betaField').$_changeBuffer, []);
@@ -58,39 +58,39 @@ tap.test(p.name, (suite) => {
       try {
         m.next({
           alphaField: 'five',
-          betaField: 6
+          betaField: 6,
         });
       } catch (e) {
         err = e;
       }
       bs.same(err, {
         error: NAN,
-        target: 'alphaField'
+        target: 'alphaField',
       });
       // console.log('--- basic set -- error:', inspect(allHistory, { depth: 5 }));
       bs.same(history, [{
         alphaField: 0,
-        betaField: 0
+        betaField: 0,
       }, {
         alphaField: 2,
-        betaField: 4
+        betaField: 4,
       }]);
       bs.same(m.value.alphaField, 2);
       bs.same(m.value.betaField, 4);
 
       m.next({
         alphaField: 10,
-        betaField: 20
+        betaField: 20,
       });
       bs.same(history, [{
         alphaField: 0,
-        betaField: 0
+        betaField: 0,
       }, {
         alphaField: 2,
-        betaField: 4
+        betaField: 4,
       }, {
         alphaField: 10,
-        betaField: 20
+        betaField: 20,
       }]);
       bs.same(m.value.alphaField, 10);
       bs.same(m.value.betaField, 20);

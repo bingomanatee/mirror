@@ -12,3 +12,8 @@ updated rollup, dependencies
 
 * Added the $asset as a workaround for mutability. 
 * Upgraded $_withChildren for a more economic blend of data
+
+## 0.1.10
+
+* changed child update system to "scorched earth" all child values into parent on child next/set
+* included funky diagram of update - may not be current but it is cool. 

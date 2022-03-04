@@ -103,36 +103,20 @@ export default (BaseClass) => class WithChildren extends BaseClass {
     const target = this;
     this.$children.set(key, child);
     child.subscribe({
-      next(value) {
-        if (target.$lastChange) {
-          const lastValueChildValue = getKey(target.$lastChange.value, key);
-          if (lastValueChildValue !== value) {
-            try {
-              setKey(target.$lastChange.value, key, value);
-            } catch (err) {
-              if (target.$_mutable) {
-                target.$lastChange.value = setKey(target.$lastChange.value, key, value);
-              } else {
-                target.$lastChange.value = produce(target.$lastChange.value, (draft) => {
-                  setKey(draft, key, value);
-                });
-              }
-            }
-          }
-        } else {
-          const childValue = getKey(target.value, key);
-          if (childValue !== value) {
-            if (target.$_mutable) {
-              target.next(setKey(clone(target.value), key, value));
-            } else {
-              target.next(produce(target.value, (draft) => {
-                setKey(draft, key, value);
-              }));
-            }
-          }
-        }
+      next() {
+        target.$refreshValueFromChildren();
       },
     });
+  }
+
+  $refreshValueFromChildren() {
+    if (this.$_hasChildren) {
+      if (this.$lastChange) {
+        this.$lastChange.value = this.$_withChildValues(this.$lastChange.value);
+      } else {
+        this.next(this.$_withChildValues(this.value));
+      }
+    }
   }
 
   /**
