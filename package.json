@@ -1,6 +1,6 @@
 {
   "name": "@wonderlandlabs/mirror",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Full successor to Looking Glass Engine",
   "main": "lib/index.js",
   "module": "es/index.js",
