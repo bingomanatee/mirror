@@ -116,6 +116,9 @@ export default (BaseClass) => class WithChildren extends BaseClass {
       } else {
         this.next(this.$_withChildValues(this.value));
       }
+      if (this.$parent) {
+        this.$parent.$refreshValueFromChildren();
+      }
     }
   }
 
